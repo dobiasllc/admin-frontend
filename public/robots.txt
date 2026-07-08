@@ -1,0 +1,3 @@
+# Disallow all robots — admin portal should not be indexed
+User-agent: *
+Disallow: /
