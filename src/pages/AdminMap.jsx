@@ -7,8 +7,9 @@
  *  - Vehicle cards as horizontal scroll row below map on mobile, sidebar on desktop
  *  - Single-click vehicle card → load trip list
  *  - Double-click vehicle card → pan map to that vehicle's location
- *  - Car photo circle markers with colored ring (green=live, blue=parked)
+ *  - Car photo circle markers with colored ring (green=live/moving, blue=parked)
  *  - Trip list below map; click Show → polyline + start/end pins
+ *  - Dead-reckoning: smooth position interpolation between 10-second telemetry polls
  */
 import { useState, useEffect, useCallback, useRef, Component } from 'react';
 import { useApi } from '../context/AuthContext';
@@ -27,8 +28,11 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
+// Speed below which a vehicle is considered stationary (matches backend threshold).
+// Filters out GPS jitter that makes parked cars appear to be moving slowly.
+const MOVING_SPEED_THRESHOLD_MPH = 5;
+
 // ── Car photo circle marker ────────────────────────────────────────────────
-// borderColor: green = live/moving, blue = parked/last-known
 function makeCarIcon(imageUrl, borderColor = '#2563eb') {
   const size = 44;
   const border = 3;
@@ -47,7 +51,6 @@ function makeCarIcon(imageUrl, borderColor = '#2563eb') {
       popupAnchor: [0, -(size / 2 + 4)],
     });
   }
-  // Fallback: plain colored circle with first letter
   const label = borderColor === '#16a34a' ? '▶' : 'P';
   return L.divIcon({
     className: '',
@@ -62,7 +65,7 @@ function makeCarIcon(imageUrl, borderColor = '#2563eb') {
   });
 }
 
-// Trip start / end pins (small, no photo needed)
+// Trip start / end pins
 function makeCircleIcon(color, label = '') {
   return L.divIcon({
     className: '',
@@ -110,16 +113,9 @@ class MapErrorBoundary extends Component {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function getVehiclePosition(tel) {
-  if (!tel) return null;
-  const lat = tel.latitude          ? Number(tel.latitude)          : (tel.lastKnownLatitude  ? Number(tel.lastKnownLatitude)  : null);
-  const lon = tel.longitude         ? Number(tel.longitude)         : (tel.lastKnownLongitude ? Number(tel.lastKnownLongitude) : null);
-  return (lat && lon) ? [lat, lon] : null;
-}
 
-// ── Staleness helper ───────────────────────────────────────────────────────
-// "Live" = has GPS coords AND the telemetry timestamp is within the last 5 minutes.
-// Older data is shown as "Parked (last known)" to avoid stale speed/location.
+// "Live" = has GPS coords AND telemetry timestamp is within the last 5 minutes
+// AND speed is above the noise threshold (or we have a very recent timestamp).
 const LIVE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 function isRecentTimestamp(ts) {
@@ -131,14 +127,50 @@ function isRecentTimestamp(ts) {
   }
 }
 
+/**
+ * Determine if a vehicle is genuinely moving (not GPS noise).
+ * Requires: recent telemetry AND speed > MOVING_SPEED_THRESHOLD_MPH.
+ */
+function isVehicleMoving(tel) {
+  if (!tel) return false;
+  if (!isRecentTimestamp(tel.timestamp)) return false;
+  const speed = tel.speedMph != null ? Number(tel.speedMph) : 0;
+  return speed > MOVING_SPEED_THRESHOLD_MPH;
+}
+
+/**
+ * Dead-reckoning: extrapolate a new [lat, lon] from a known position,
+ * heading (degrees, 0=North clockwise), speed (mph), and elapsed time (ms).
+ *
+ * Uses flat-earth approximation — accurate enough for <30 second intervals.
+ * At 43°N latitude: 1° lat ≈ 69.0 mi, 1° lon ≈ 50.5 mi.
+ */
+function extrapolatePosition(lat, lon, headingDeg, speedMph, elapsedMs) {
+  if (!lat || !lon || !speedMph || speedMph <= MOVING_SPEED_THRESHOLD_MPH) {
+    return [lat, lon];
+  }
+  const elapsedHours = elapsedMs / 3600000;
+  const distanceMiles = speedMph * elapsedHours;
+  const headingRad = (headingDeg * Math.PI) / 180;
+  const LAT_MILES = 69.0;
+  const LON_MILES = 50.5; // approximate at ~43°N
+  const dLat = (distanceMiles * Math.cos(headingRad)) / LAT_MILES;
+  const dLon = (distanceMiles * Math.sin(headingRad)) / LON_MILES;
+  return [lat + dLat, lon + dLon];
+}
+
 // ── Vehicle Card ───────────────────────────────────────────────────────────
-// Defined OUTSIDE AdminMap so it doesn't remount on every state change,
-// which would break double-click detection.
-function VehicleCard({ v, telemetry, selectedVin, onSingleClick, onDoubleClick }) {
+function VehicleCard({ v, telemetry, displayPositions, selectedVin, onSingleClick, onDoubleClick }) {
   const tel      = telemetry[v.vin];
-  const isLive   = tel?.latitude && tel?.longitude && isRecentTimestamp(tel?.timestamp);
-  const isParked = !isLive && (tel?.latitude || tel?.lastKnownLatitude) && (tel?.longitude || tel?.lastKnownLongitude);
-  const hasPos   = isLive || isParked;
+  // "Live" = recent telemetry AND speed > threshold (not GPS noise)
+  const moving   = isVehicleMoving(tel);
+  // "Parked" = has a known position but not moving
+  const hasLat   = tel?.latitude || tel?.lastKnownLatitude;
+  const hasLon   = tel?.longitude || tel?.lastKnownLongitude;
+  const isParked = !moving && hasLat && hasLon;
+  const hasPos   = moving || isParked;
+
+  const speed = tel?.speedMph != null ? Number(tel.speedMph) : 0;
 
   return (
     <button
@@ -173,12 +205,13 @@ function VehicleCard({ v, telemetry, selectedVin, onSingleClick, onDoubleClick }
             );
           })()}
           <p>
-            {isLive   ? '🟢 Live' : ''}
+            {moving   ? '🟢 Live' : ''}
             {isParked ? '🔵 Parked' : ''}
-            {!isLive && !isParked ? '⚫ No GPS' : ''}
+            {!moving && !isParked ? '⚫ No GPS' : ''}
             {hasPos && ' · dbl-click to pan'}
           </p>
-          {tel.speedMph > 0 && <p>🚗 {Number(tel.speedMph).toFixed(0)} mph</p>}
+          {/* Only show speed if above noise threshold */}
+          {speed > MOVING_SPEED_THRESHOLD_MPH && <p>🚗 {speed.toFixed(0)} mph</p>}
         </div>
       ) : (
         <p className="mt-1 text-xs text-gray-400 italic">No telemetry</p>
@@ -191,23 +224,25 @@ function VehicleCard({ v, telemetry, selectedVin, onSingleClick, onDoubleClick }
 export default function AdminMap() {
   const api = useApi();
 
-  const [vehicles, setVehicles]         = useState([]);
-  const [telemetry, setTelemetry]       = useState({});
-  const [selectedVin, setSelectedVin]   = useState(null);
-  const [trips, setTrips]               = useState([]);
-  const [tripsLoading, setTripsLoading] = useState(false);
-  const [activeTrip, setActiveTrip]     = useState(null);
-  const [tripLoading, setTripLoading]   = useState(false);
-  const [flyTo, setFlyTo]               = useState(null);
-  const [loading, setLoading]           = useState(true);
-  const [err, setErr]                   = useState('');
-  const [lastUpdated, setLastUpdated]   = useState(null);
+  const [vehicles, setVehicles]               = useState([]);
+  const [telemetry, setTelemetry]             = useState({});
+  // displayPositions: interpolated positions for smooth map animation
+  // { [vin]: { lat, lon, lastRealTs } }
+  const [displayPositions, setDisplayPositions] = useState({});
+  const [selectedVin, setSelectedVin]         = useState(null);
+  const [trips, setTrips]                     = useState([]);
+  const [tripsLoading, setTripsLoading]       = useState(false);
+  const [activeTrip, setActiveTrip]           = useState(null);
+  const [tripLoading, setTripLoading]         = useState(false);
+  const [flyTo, setFlyTo]                     = useState(null);
+  const [loading, setLoading]                 = useState(true);
+  const [err, setErr]                         = useState('');
+  const [lastUpdated, setLastUpdated]         = useState(null);
 
-  // Keep a stable ref to the vehicles list so the interval can read it
-  // without needing vehicles in its dependency array (avoids re-registering
-  // the interval every time a vehicle card is clicked).
-  const vehiclesRef = useRef([]);
-  useEffect(() => { vehiclesRef.current = vehicles; }, [vehicles]);
+  const vehiclesRef  = useRef([]);
+  const telemetryRef = useRef({});
+  useEffect(() => { vehiclesRef.current  = vehicles;  }, [vehicles]);
+  useEffect(() => { telemetryRef.current = telemetry; }, [telemetry]);
 
   const fetchLatestTelemetry = useCallback((vin) =>
     api.get(`/admin/vehicles/${vin}/telemetry-latest`)
@@ -226,13 +261,26 @@ export default function AdminMap() {
           results.forEach(r => { if (r.data) updated[r.vin] = r.data; });
           return updated;
         });
+        // Snap display positions to real GPS on each poll
+        setDisplayPositions(prev => {
+          const next = { ...prev };
+          results.forEach(r => {
+            if (!r.data) return;
+            const lat = r.data.latitude  ? Number(r.data.latitude)  : null;
+            const lon = r.data.longitude ? Number(r.data.longitude) : null;
+            if (lat && lon) {
+              next[r.vin] = { lat, lon, lastRealTs: Date.now() };
+            }
+          });
+          return next;
+        });
         setLastUpdated(new Date());
       })
       .catch(() => {});
   }, [fetchLatestTelemetry]);
 
   useEffect(() => {
-    // Initial load: fetch vehicles then their telemetry
+    // Initial load
     api.get('/admin/vehicles')
       .then(r => {
         const teslaVehicles = (r.data || []).filter(v => v.teslaEnabled);
@@ -242,17 +290,60 @@ export default function AdminMap() {
       })
       .then(results => {
         const map = {};
-        results.forEach(r => { if (r.data) map[r.vin] = r.data; });
+        const positions = {};
+        results.forEach(r => {
+          if (r.data) {
+            map[r.vin] = r.data;
+            const lat = r.data.latitude  ? Number(r.data.latitude)  : null;
+            const lon = r.data.longitude ? Number(r.data.longitude) : null;
+            if (lat && lon) positions[r.vin] = { lat, lon, lastRealTs: Date.now() };
+          }
+        });
         setTelemetry(map);
+        setDisplayPositions(positions);
         setLastUpdated(new Date());
       })
       .catch(e => setErr(`Failed to load vehicles: ${e.response?.status} — ${e.response?.data?.error || e.message}`))
       .finally(() => setLoading(false));
 
     // Poll every 10 s for updated positions
-    const interval = setInterval(refreshTelemetry, 10000);
-    return () => clearInterval(interval);
+    const pollInterval = setInterval(refreshTelemetry, 10000);
+    return () => clearInterval(pollInterval);
   }, [api, fetchLatestTelemetry, refreshTelemetry]);
+
+  // ── Dead-reckoning animation ─────────────────────────────────────────────
+  // Every 100ms, advance each moving vehicle's display position based on
+  // its last known heading and speed. When real telemetry arrives (above),
+  // displayPositions snaps back to the true GPS coordinates.
+  useEffect(() => {
+    const animInterval = setInterval(() => {
+      const tel = telemetryRef.current;
+      setDisplayPositions(prev => {
+        const next = { ...prev };
+        let changed = false;
+        Object.keys(prev).forEach(vin => {
+          const t = tel[vin];
+          if (!t) return;
+          const speed   = t.speedMph   != null ? Number(t.speedMph)   : 0;
+          const heading = t.heading    != null ? Number(t.heading)    : 0;
+          if (speed <= MOVING_SPEED_THRESHOLD_MPH) return; // parked — don't extrapolate
+          if (!isRecentTimestamp(t.timestamp)) return;     // stale data — don't extrapolate
+
+          const pos = prev[vin];
+          if (!pos) return;
+          const elapsed = Date.now() - (pos.lastRealTs || Date.now());
+          // Cap extrapolation at 15 seconds to avoid drifting too far from truth
+          if (elapsed > 15000) return;
+
+          const [newLat, newLon] = extrapolatePosition(pos.lat, pos.lon, heading, speed, 100);
+          next[vin] = { ...pos, lat: newLat, lon: newLon };
+          changed = true;
+        });
+        return changed ? next : prev;
+      });
+    }, 100);
+    return () => clearInterval(animInterval);
+  }, []); // stable — reads telemetryRef directly
 
   const loadTrips = (vin) => {
     setSelectedVin(vin);
@@ -267,11 +358,9 @@ export default function AdminMap() {
       .finally(() => setTripsLoading(false));
   };
 
-  // Double-click: pan map to vehicle location
   const panToVehicle = (vin) => {
-    const tel = telemetry[vin];
-    const pos = getVehiclePosition(tel);
-    if (pos) setFlyTo(pos);
+    const pos = displayPositions[vin];
+    if (pos) setFlyTo([pos.lat, pos.lon]);
   };
 
   const loadTripDetail = (vin, trip) => {
@@ -335,17 +424,16 @@ export default function AdminMap() {
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono">{err}</div>
         )}
 
-        {/* ── Desktop: sidebar left + map right ─────────────────────────── */}
-        {/* ── Mobile: map top, then cards row, then trips ───────────────── */}
         <div className="flex flex-col lg:flex-row gap-4">
 
-          {/* Desktop sidebar (hidden on mobile) */}
+          {/* Desktop sidebar */}
           <div className="hidden lg:flex lg:flex-col lg:w-56 xl:w-64 gap-3 flex-shrink-0">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tesla Vehicles</h2>
             {vehicles.length === 0 && <p className="text-gray-400 text-sm">No Tesla vehicles found.</p>}
             {vehicles.map(v => (
               <VehicleCard key={v.vin} v={v}
-                telemetry={telemetry} selectedVin={selectedVin}
+                telemetry={telemetry} displayPositions={displayPositions}
+                selectedVin={selectedVin}
                 onSingleClick={loadTrips} onDoubleClick={panToVehicle} />
             ))}
           </div>
@@ -353,8 +441,6 @@ export default function AdminMap() {
           {/* Map + mobile cards + trips */}
           <div className="flex-1 space-y-4 min-w-0">
 
-            {/* Map — isolation:isolate creates a new stacking context so Leaflet's
-                internal z-index layers (400–600) don't bleed above the site navbar */}
             <MapErrorBoundary>
               <div
                 className="bg-white rounded-xl border border-gray-200 overflow-hidden"
@@ -367,37 +453,42 @@ export default function AdminMap() {
                   />
                   {flyTo && <FlyTo position={flyTo} zoom={13} />}
 
-                  {/* Vehicle markers */}
+                  {/* Vehicle markers — use dead-reckoned displayPositions for smooth motion */}
                   {vehicles.map(v => {
                     const tel = telemetry[v.vin];
                     if (!tel) return null;
 
-                    const hasLat = tel.latitude  ? Number(tel.latitude)  : null;
-                    const hasLon = tel.longitude ? Number(tel.longitude) : null;
-                    const pkLat  = tel.lastKnownLatitude  ? Number(tel.lastKnownLatitude)  : null;
-                    const pkLon  = tel.lastKnownLongitude ? Number(tel.lastKnownLongitude) : null;
+                    const dp      = displayPositions[v.vin];
+                    const moving  = isVehicleMoving(tel);
+                    const speed   = tel.speedMph != null ? Number(tel.speedMph) : 0;
 
-                    // Only show green "live" ring if data is fresh (within 5 min)
-                    const live = hasLat && hasLon && isRecentTimestamp(tel.timestamp);
-                    // Fall back to parked marker using lat/lon from TELEMETRY#LATEST or lastKnown
-                    const parkedLat = !live ? (hasLat || pkLat) : null;
-                    const parkedLon = !live ? (hasLon || pkLon) : null;
+                    // Use interpolated position for moving vehicles, raw for parked
+                    const dispLat = dp ? dp.lat : null;
+                    const dispLon = dp ? dp.lon : null;
+
+                    // Fallback to lastKnown if no live position
+                    const pkLat = tel.lastKnownLatitude  ? Number(tel.lastKnownLatitude)  : null;
+                    const pkLon = tel.lastKnownLongitude ? Number(tel.lastKnownLongitude) : null;
 
                     const imgUrl = v.imageUrl || null;
 
-                    if (live) {
+                    if (moving && dispLat && dispLon) {
                       return (
-                        <Marker key={v.vin} position={[hasLat, hasLon]}
+                        <Marker key={v.vin} position={[dispLat, dispLon]}
                           icon={makeCarIcon(imgUrl, '#16a34a')}>
                           <Popup>
                             <strong>{v.year} {v.make} {v.model}</strong><br />
                             {tel.batteryLevel != null && <>🔋 {Number(tel.batteryLevel).toFixed(0)}%{tel.batteryRange ? ` · ${Number(tel.batteryRange).toFixed(0)} mi` : ''}<br /></>}
-                            {tel.speedMph > 0 ? `🚗 ${Number(tel.speedMph).toFixed(0)} mph` : '🅿 Parked'}<br />
+                            {speed > MOVING_SPEED_THRESHOLD_MPH ? `🚗 ${speed.toFixed(0)} mph` : '🅿 Parked'}<br />
                             {tel.locked != null ? (tel.locked ? '🔒 Locked' : '🔓 Unlocked') : ''}
                           </Popup>
                         </Marker>
                       );
                     }
+
+                    // Parked: use last known position (live or lastKnown fallback)
+                    const parkedLat = dispLat || pkLat;
+                    const parkedLon = dispLon || pkLon;
 
                     if (parkedLat && parkedLon) {
                       return (
@@ -405,7 +496,7 @@ export default function AdminMap() {
                           icon={makeCarIcon(imgUrl, '#2563eb')}>
                           <Popup>
                             <strong>{v.year} {v.make} {v.model}</strong><br />
-                            🅿 Last known location<br />
+                            🅿 Parked<br />
                             {tel.timestamp && <>🕐 {new Date(tel.timestamp).toLocaleString()}<br /></>}
                             {tel.batteryLevel != null && <>🔋 {Number(tel.batteryLevel).toFixed(0)}%</>}
                           </Popup>
@@ -462,14 +553,14 @@ export default function AdminMap() {
 
             {/* Map legend */}
             <div className="flex flex-wrap gap-4 text-xs text-gray-500 px-1">
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border-2 border-green-600 bg-gray-200" /> Live / Moving</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border-2 border-green-600 bg-gray-200" /> Live / Moving (&gt;{MOVING_SPEED_THRESHOLD_MPH} mph)</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border-2 border-blue-600 bg-gray-200" /> Parked (last known)</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-green-600" /> Trip Start</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-red-600" /> Trip End</span>
               <span className="flex items-center gap-1"><span className="inline-block w-8 h-1 bg-blue-600 rounded" /> Route</span>
             </div>
 
-            {/* Mobile vehicle cards (horizontal scroll, hidden on lg+) */}
+            {/* Mobile vehicle cards */}
             <div className="lg:hidden">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tesla Vehicles</h2>
               {vehicles.length === 0
@@ -478,7 +569,8 @@ export default function AdminMap() {
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                     {vehicles.map(v => (
                       <VehicleCard key={v.vin} v={v}
-                        telemetry={telemetry} selectedVin={selectedVin}
+                        telemetry={telemetry} displayPositions={displayPositions}
+                        selectedVin={selectedVin}
                         onSingleClick={loadTrips} onDoubleClick={panToVehicle} />
                     ))}
                   </div>
