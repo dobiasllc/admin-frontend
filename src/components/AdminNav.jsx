@@ -18,13 +18,15 @@ import { NavLink } from 'react-router-dom';
 // NOTE: basename="/admin" is set on the Router in App.jsx, so these paths
 // are relative to /admin — do NOT include /admin here or links will double-prefix.
 const NAV_ITEMS = [
-  { to: '/',            label: 'Dashboard', icon: '🏠', exact: true },
-  { to: '/bookings',   label: 'Bookings',  icon: '📋' },
-  { to: '/calendar',   label: 'Calendar',  icon: '📅' },
-  { to: '/vehicles',   label: 'Vehicles',  icon: '🚗' },
-  { to: '/users',      label: 'Users',     icon: '👥' },
-  { to: '/guest-keys', label: 'Guest Keys',icon: '🔑' },
-  { to: '/map',        label: 'Live Map',  icon: '🗺' },
+  { to: '/',             label: 'Dashboard',   icon: '🏠', exact: true },
+  { to: '/bookings',     label: 'Bookings',    icon: '📋' },
+  { to: '/calendar',     label: 'Calendar',    icon: '📅' },
+  { to: '/vehicles',     label: 'Vehicles',    icon: '🚗' },
+  { to: '/maintenance',  label: 'Maintenance', icon: '🔧' },
+  { to: '/users',        label: 'Users',       icon: '👥' },
+  { to: '/guest-keys',   label: 'Guest Keys',  icon: '🔑' },
+  { to: '/map',          label: 'Live Map',    icon: '🗺' },
+  { to: '/settings',     label: 'Settings',    icon: '⚙️' },
 ];
 
 /** The inner sidebar content — shared between desktop sidebar and mobile drawer */

@@ -204,6 +204,24 @@ function VehicleCard({ v, telemetry, displayPositions, selectedVin, onSingleClic
               </p>
             );
           })()}
+          {/* Charging state — only show when actively charging */}
+          {tel.chargingState && tel.chargingState !== 'Disconnected' && tel.chargingState !== 'NoPower' && (
+            <p>🔌 {tel.chargingState}</p>
+          )}
+          {/* Door / trunk state — only show when something is open */}
+          {(() => {
+            const doorMap = {
+              'Front Driver':    tel.frontDriverDoorOpen,
+              'Front Passenger': tel.frontPassengerDoorOpen,
+              'Rear Driver':     tel.rearDriverDoorOpen,
+              'Rear Passenger':  tel.rearPassengerDoorOpen,
+              'Trunk':           tel.trunkOpen,
+              'Frunk':           tel.frunkOpen,
+            };
+            const open = Object.entries(doorMap).filter(([, v]) => v === true).map(([k]) => k);
+            if (open.length === 0) return null;
+            return <p className="text-amber-600">🚪 {open.join(', ')} open</p>;
+          })()}
           <p>
             {moving   ? '🟢 Live' : ''}
             {isParked ? '🔵 Parked' : ''}
@@ -478,9 +496,11 @@ export default function AdminMap() {
                           icon={makeCarIcon(imgUrl, '#16a34a')}>
                           <Popup>
                             <strong>{v.year} {v.make} {v.model}</strong><br />
-                            {tel.batteryLevel != null && <>🔋 {Number(tel.batteryLevel).toFixed(0)}%{tel.batteryRange ? ` · ${Number(tel.batteryRange).toFixed(0)} mi` : ''}<br /></>}
+                            {tel.batteryLevel != null && <>🔋 {Number(tel.batteryLevel).toFixed(0)}%{tel.batteryRange ? ` · ${Number(tel.batteryRange).toFixed(0)} mi range` : ''}<br /></>}
                             {speed > MOVING_SPEED_THRESHOLD_MPH ? `🚗 ${speed.toFixed(0)} mph` : '🅿 Parked'}<br />
-                            {tel.locked != null ? (tel.locked ? '🔒 Locked' : '🔓 Unlocked') : ''}
+                            {tel.odometerMiles != null && <>📍 {Number(tel.odometerMiles).toLocaleString(undefined, { maximumFractionDigits: 0 })} mi odometer<br /></>}
+                            {tel.locked != null && <>{tel.locked ? '🔒 Locked' : '🔓 Unlocked'}<br /></>}
+                            {tel.chargingState && tel.chargingState !== 'Disconnected' && tel.chargingState !== 'NoPower' && <>🔌 {tel.chargingState}<br /></>}
                           </Popup>
                         </Marker>
                       );
@@ -498,7 +518,10 @@ export default function AdminMap() {
                             <strong>{v.year} {v.make} {v.model}</strong><br />
                             🅿 Parked<br />
                             {tel.timestamp && <>🕐 {new Date(tel.timestamp).toLocaleString()}<br /></>}
-                            {tel.batteryLevel != null && <>🔋 {Number(tel.batteryLevel).toFixed(0)}%</>}
+                            {tel.batteryLevel != null && <>🔋 {Number(tel.batteryLevel).toFixed(0)}%{tel.batteryRange ? ` · ${Number(tel.batteryRange).toFixed(0)} mi range` : ''}<br /></>}
+                            {tel.odometerMiles != null && <>📍 {Number(tel.odometerMiles).toLocaleString(undefined, { maximumFractionDigits: 0 })} mi odometer<br /></>}
+                            {tel.locked != null && <>{tel.locked ? '🔒 Locked' : '🔓 Unlocked'}<br /></>}
+                            {tel.chargingState && tel.chargingState !== 'Disconnected' && tel.chargingState !== 'NoPower' && <>🔌 {tel.chargingState}</>}
                           </Popup>
                         </Marker>
                       );
@@ -623,7 +646,8 @@ export default function AdminMap() {
                               <td className="px-4 py-2">{Number(t.distanceMiles).toFixed(1)} mi</td>
                               <td className="px-4 py-2">{Number(t.maxSpeedMph).toFixed(0)} mph</td>
                               <td className="px-4 py-2">
-                                {(t.startBatteryPct != null && t.endBatteryPct != null)
+                                {(t.startBatteryPct != null && Number(t.startBatteryPct) > 0 &&
+                                  t.endBatteryPct != null && Number(t.endBatteryPct) > 0)
                                   ? `${(Number(t.startBatteryPct) - Number(t.endBatteryPct)).toFixed(0)}%`
                                   : '—'}
                               </td>

@@ -13,6 +13,8 @@ import AdminMap from './pages/AdminMap';
 import AdminGuestKeys from './pages/AdminGuestKeys';
 import AdminCreateBooking from './pages/AdminCreateBooking';
 import AdminPrintContract from './pages/AdminPrintContract';
+import AdminSettings from './pages/AdminSettings';
+import AdminMaintenance from './pages/AdminMaintenance';
 
 function App() {
   return (
@@ -55,6 +57,12 @@ function App() {
         />
         <Route path="/guest-keys"
           element={<AdminRoute><AdminGuestKeys /></AdminRoute>}
+        />
+        <Route path="/maintenance"
+          element={<AdminRoute><AdminMaintenance /></AdminRoute>}
+        />
+        <Route path="/settings"
+          element={<AdminRoute><AdminSettings /></AdminRoute>}
         />
 
         {/* ── Fallback: redirect everything to / (which is /admin) ─────────── */}

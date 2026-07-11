@@ -120,49 +120,32 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* ── Tesla Account card ── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                teslaStored ? 'bg-green-100' : 'bg-gray-100'
-              }`}>
-                {teslaStored ? '✅' : '🔌'}
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">Tesla Account</h2>
-                {teslaStored ? (
-                  <p className="text-sm text-green-700 mt-0.5">
-                    Connected
-                    {teslaConnectedAt && (
-                      <span className="text-gray-400 font-normal">
-                        {' '}· last authorized {new Date(teslaConnectedAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    Not connected — OAuth tokens are required for vehicle commands and guest keys.
-                  </p>
-                )}
-              </div>
+        {/* ── Tesla Account status (compact) ── */}
+        <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 ${
+          teslaStored ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className="text-lg">{teslaStored ? '✅' : '🔌'}</span>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">
+                Tesla Account {teslaStored ? 'Connected' : 'Not Connected'}
+              </p>
+              {teslaStored && teslaConnectedAt && (
+                <p className="text-xs text-gray-500">
+                  Last authorized {new Date(teslaConnectedAt).toLocaleDateString()}
+                </p>
+              )}
+              {!teslaStored && (
+                <p className="text-xs text-red-700">OAuth tokens required for vehicle commands and guest keys.</p>
+              )}
             </div>
-            <button
-              onClick={handleConnectTesla}
-              className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                teslaStored
-                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  : 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
-              }`}
-            >
-              {teslaStored ? 'Re-authorize Tesla' : 'Connect Tesla Account'}
-            </button>
           </div>
-          {teslaStored && (
-            <p className="mt-3 text-xs text-gray-400">
-              Tokens are refreshed automatically every 6 hours by the token refresher Lambda. Re-authorize only if you see token-expired errors.
-            </p>
-          )}
+          <Link
+            to="/settings"
+            className="shrink-0 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+          >
+            ⚙ Settings
+          </Link>
         </div>
 
         {/* ── Vehicle cards ── */}
@@ -172,7 +155,12 @@ export default function AdminDashboard() {
             <Link to="/vehicles" className="text-sm text-blue-600 hover:underline">Manage vehicles →</Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {(dash?.vehicles || []).map(v => (
+            {(dash?.vehicles || []).map(v => {
+              const guestActive  = v.currentGuestModeActive === true;
+              const eraseStatus  = v.currentEraseStatus || '';
+              const guestName    = v.currentGuestName || '';
+              const bookingId    = v.currentBookingId || '';
+              return (
               <div key={v.vin} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {v.imageUrl && (
                   <img src={v.imageUrl} alt={v.model} className="w-full h-32 object-cover" />
@@ -188,9 +176,41 @@ export default function AdminDashboard() {
                       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Tesla</span>
                     )}
                   </div>
+                  {/* Guest mode state indicators */}
+                  {v.teslaEnabled && bookingId && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${guestActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        <span className="text-xs text-gray-600">
+                          Guest Mode: <span className={guestActive ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                            {guestActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </span>
+                      </div>
+                      {guestName && (
+                        <p className="text-xs text-gray-500 truncate">👤 {guestName}</p>
+                      )}
+                      {eraseStatus && (
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
+                          eraseStatus === 'erased' ? 'bg-green-100 text-green-700' :
+                          eraseStatus === 'failed' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>
+                          🗑 Erase: {eraseStatus}
+                        </span>
+                      )}
+                      <Link
+                        to={`/bookings/${bookingId}`}
+                        className="block text-xs text-blue-600 hover:underline mt-1"
+                      >
+                        View booking →
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {(dash?.vehicles || []).length === 0 && (
               <div className="col-span-4 text-center py-8 text-gray-400 text-sm">
                 No active vehicles. <Link to="/vehicles" className="text-blue-600 hover:underline">Add one →</Link>

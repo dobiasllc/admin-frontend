@@ -164,15 +164,16 @@ export default function AdminBookings() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[640px]">
                   <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Vehicle</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Start</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">End</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Source</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Total</th>
-                    </tr>
+                     <tr>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">ID</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Vehicle</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Renter</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Start</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">End</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Source</th>
+                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Total</th>
+                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {bookings.map(b => (
@@ -186,6 +187,9 @@ export default function AdminBookings() {
                         </td>
                         <td className="px-4 py-3 font-medium text-gray-800">
                           {vehicleLabel(b.vin)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          {b.guestName || b.turoGuestName || b.userId || '—'}
                         </td>
                         <td className="px-4 py-3 text-gray-600">
                           {b.startTime ? new Date(b.startTime).toLocaleDateString() : '—'}

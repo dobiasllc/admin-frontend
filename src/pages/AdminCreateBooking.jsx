@@ -112,9 +112,43 @@ export default function AdminCreateBooking() {
   const [addlDLExp,   setAddlDLExp]   = useState("");
   const [addlDOB,     setAddlDOB]     = useState("");
 
+  // Availability check
+  const [availChecking, setAvailChecking] = useState(false);
+  const [availConflict, setAvailConflict] = useState(null); // null=unchecked, false=ok, string=conflict msg
+
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState("");
+
+  // Check availability whenever vin/dates change
+  useEffect(() => {
+    if (!vin || !startDate || !endDate || startDate >= endDate) {
+      setAvailConflict(null);
+      return;
+    }
+    setAvailChecking(true);
+    setAvailConflict(null);
+    const params = new URLSearchParams({
+      vin,
+      start: toNaiveLocal(startDate),
+      end:   toNaiveLocal(endDate),
+    });
+    api.get(`/vehicles/available?${params}`)
+      .then(r => {
+        const available = r.data?.available !== false;
+        if (!available) {
+          const conflict = r.data?.conflict;
+          const msg = conflict
+            ? `Conflict with booking ${(conflict.bookingId || '').slice(0,12)}… (${conflict.startTime?.slice(0,10)} → ${conflict.endTime?.slice(0,10)})`
+            : "Vehicle is not available for these dates.";
+          setAvailConflict(msg);
+        } else {
+          setAvailConflict(false);
+        }
+      })
+      .catch(() => setAvailConflict(null)) // silently ignore check errors
+      .finally(() => setAvailChecking(false));
+  }, [vin, startDate, endDate]);
 
   // Load vehicles
   useEffect(() => {
@@ -288,6 +322,24 @@ export default function AdminCreateBooking() {
             </div>
             {startDate && endDate && startDate >= endDate && (
               <p className="text-xs text-red-600">End date must be after start date.</p>
+            )}
+
+            {/* Availability indicator */}
+            {availChecking && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />
+                Checking availability…
+              </div>
+            )}
+            {!availChecking && availConflict === false && vin && startDate && endDate && startDate < endDate && (
+              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <span>✓</span> Vehicle is available for these dates.
+              </div>
+            )}
+            {!availChecking && availConflict && (
+              <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <span>⚠</span> <span><strong>Booking conflict:</strong> {availConflict}</span>
+              </div>
             )}
 
             {/* Primary Renter */}

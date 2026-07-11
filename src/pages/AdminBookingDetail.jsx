@@ -659,12 +659,15 @@ function GuestKeyPanel({ booking, onRefresh }) {
   const [msg, setMsg]         = useState("");
   const [err, setErr]         = useState("");
 
-  const gkStatus    = booking.guestKeyStatus || "";
-  const createdAt   = booking.guestKeyCreatedAt || "";
-  const activatedAt = booking.guestKeyActivatedAt || "";
-  const revokedAt   = booking.guestKeyRevokedAt || "";
-  const isTesla     = booking.teslaEnabled || booking.vin?.startsWith("5YJ") || booking.vin?.startsWith("7SA");
-  const portalUrl   = normalisePortalUrl(booking.guestAccessUrl || booking.guestKeyLink);
+  const gkStatus          = booking.guestKeyStatus || "";
+  const createdAt         = booking.guestKeyCreatedAt || "";
+  const activatedAt       = booking.guestKeyActivatedAt || "";
+  const revokedAt         = booking.guestKeyRevokedAt || "";
+  const eraseStatus       = booking.eraseUserDataStatus || "";
+  const eraseAt           = booking.eraseUserDataAt || "";
+  const guestModeCmd      = booking.guestModeCommandStatus || "";
+  const isTesla           = booking.teslaEnabled || booking.vin?.startsWith("5YJ") || booking.vin?.startsWith("7SA");
+  const portalUrl         = normalisePortalUrl(booking.guestAccessUrl || booking.guestKeyLink);
 
   const callAction = useCallback(async (action, body = {}) => {
     setLoading(true);
@@ -807,10 +810,50 @@ function GuestKeyPanel({ booking, onRefresh }) {
             {loading ? "Working…" : "🔑 Revoke Drivers"}
           </button>
 
+          {/* Send SMS — manual trigger (auto-send disabled during testing) */}
+          {portalUrl && (
+            <button
+              onClick={() => {
+                if (window.confirm("Send an SMS to the renter with the guest portal link? Make sure the booking has a phone number on file.")) {
+                  callAction("send-sms");
+                }
+              }}
+              disabled={loading}
+              title="Manually send the portal URL to the renter via SMS"
+              className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 disabled:opacity-40"
+            >
+              {loading ? "Working…" : "📱 Send SMS"}
+            </button>
+          )}
+
         </div>
         <p className="text-xs text-gray-400 mt-2">
           These controls bypass the automated schedule. Use for manual intervention only.
         </p>
+
+        {/* ── Per-action status indicators ── */}
+        {(eraseStatus || guestModeCmd) && (
+          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-3 text-xs">
+            {eraseStatus && (
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
+                eraseStatus === "erased"  ? "bg-green-100 text-green-700" :
+                eraseStatus === "failed"  ? "bg-red-100 text-red-700" :
+                "bg-gray-100 text-gray-600"
+              }`}>
+                🗑 Erase: {eraseStatus === "erased" ? `✓ Done${eraseAt ? ` (${new Date(eraseAt).toLocaleString()})` : ""}` : eraseStatus}
+              </span>
+            )}
+            {guestModeCmd && (
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
+                guestModeCmd === "success" ? "bg-green-100 text-green-700" :
+                guestModeCmd === "failed"  ? "bg-red-100 text-red-700" :
+                "bg-gray-100 text-gray-600"
+              }`}>
+                ⚡ Guest Mode cmd: {guestModeCmd}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -850,8 +893,8 @@ function ReadinessBanner({ booking }) {
           <span className={isPaid ? "text-green-700" : "text-red-600"}>
             {isPaid ? "✓ Paid" : "✗ Not Paid"}
           </span>
-          <span className={contractOk ? "text-green-700" : "text-red-600"}>
-            {contractOk ? "✓ Contract Signed" : "✗ Contract Not Signed"}
+          <span className={isSigned ? "text-green-700" : contractRequired ? "text-red-600" : "text-gray-500"}>
+            {isSigned ? "✓ Contract Signed" : contractRequired ? "✗ Contract Not Signed" : "— Not Required"}
           </span>
         </div>
       </div>

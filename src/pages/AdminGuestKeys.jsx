@@ -444,9 +444,11 @@ export default function AdminGuestKeys() {
   const [actionLoading, setActionLoading] = useState(null); // bookingId of in-flight action
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
-  const [search,       setSearch]       = useState("");
+  const [statusFilter,     setStatusFilter]     = useState("");
+  const [sourceFilter,     setSourceFilter]     = useState("");
+  const [search,           setSearch]           = useState("");
+  // Hide completed records older than 30 days by default to reduce clutter
+  const [hideOldCompleted, setHideOldCompleted] = useState(true);
 
   // Modals
   const [confirmModal,     setConfirmModal]     = useState(null); // { booking, action, label }
@@ -541,13 +543,27 @@ export default function AdminGuestKeys() {
   }
 
   // ── Filtered list ─────────────────────────────────────────────────────────
+  const COMPLETED_STATUSES = ["guest_mode_disabled", "revoked", "not_applicable"];
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
   const filtered = keys.filter(k => {
+    // Hide old completed records by default (end time > 30 days ago)
+    if (hideOldCompleted && COMPLETED_STATUSES.includes(k.guestKeyStatus || k.status)) {
+      const endTime = k.endTime || k.guestKeyRevokeAt || "";
+      if (endTime) {
+        try {
+          const endDate = new Date(endTime);
+          if (Date.now() - endDate.getTime() > THIRTY_DAYS_MS) return false;
+        } catch { /* ignore parse errors */ }
+      }
+    }
     if (!search) return true;
     const q = search.toLowerCase();
     return (
       (k.bookingId || "").toLowerCase().includes(q) ||
       (k.guestName || k.turoGuestName || "").toLowerCase().includes(q) ||
       (k.vin || "").toLowerCase().includes(q) ||
+      (k.vehicleName || "").toLowerCase().includes(q) ||
       (k.guestEmail || "").toLowerCase().includes(q)
     );
   });
@@ -670,6 +686,15 @@ export default function AdminGuestKeys() {
               <option value="private">Private</option>
               <option value="turo">Turo</option>
             </select>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none ml-auto">
+              <input
+                type="checkbox"
+                checked={hideOldCompleted}
+                onChange={e => setHideOldCompleted(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+              />
+              Hide completed &gt;30 days old
+            </label>
           </div>
         </div>
 
