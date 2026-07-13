@@ -8,6 +8,9 @@ import AdminBookings from './pages/AdminBookings';
 import AdminBookingDetail from './pages/AdminBookingDetail';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminUsers from './pages/AdminUsers';
+import AdminAnalytics from './pages/AdminAnalytics';
+import AdminTaxes from './pages/AdminTaxes';
+import AdminTuroGuests from './pages/AdminTuroGuests';
 import AdminVehicles from './pages/AdminVehicles';
 import AdminMap from './pages/AdminMap';
 import AdminGuestKeys from './pages/AdminGuestKeys';
@@ -63,6 +66,15 @@ function App() {
         />
         <Route path="/settings"
           element={<AdminRoute><AdminSettings /></AdminRoute>}
+        />
+        <Route path="/analytics"
+          element={<AdminRoute><AdminAnalytics /></AdminRoute>}
+        />
+        <Route path="/taxes"
+          element={<AdminRoute><AdminTaxes /></AdminRoute>}
+        />
+        <Route path="/turo-guests"
+          element={<AdminRoute><AdminTuroGuests /></AdminRoute>}
         />
 
         {/* ── Fallback: redirect everything to / (which is /admin) ─────────── */}

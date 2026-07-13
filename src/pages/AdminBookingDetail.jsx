@@ -661,6 +661,10 @@ function GuestKeyPanel({ booking, onRefresh }) {
 
   const gkStatus          = booking.guestKeyStatus || "";
   const createdAt         = booking.guestKeyCreatedAt || "";
+  const enabledAt         = booking.guestModeEnabledAt || booking.guestKeyActivatedAt || "";
+  const disabledAt        = booking.guestModeDisabledAt || booking.guestKeyRevokedAt || "";
+  const schedActivateAt   = booking.guestKeyActivateAt || "";
+  const schedRevokeAt     = booking.guestKeyRevokeAt || "";
   const activatedAt       = booking.guestKeyActivatedAt || "";
   const revokedAt         = booking.guestKeyRevokedAt || "";
   const eraseStatus       = booking.eraseUserDataStatus || "";
@@ -723,25 +727,49 @@ function GuestKeyPanel({ booking, onRefresh }) {
       {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{msg}</div>}
       {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{err}</div>}
 
-      {/* Key timestamps */}
+      {/* E2 — Key lifecycle timeline */}
       {gkStatus && (
         <dl className="grid grid-cols-2 gap-3 text-sm mb-4">
           {createdAt && (
             <div>
-              <dt className="text-gray-400 text-xs">Created</dt>
-              <dd>{new Date(createdAt).toLocaleString()}</dd>
+              <dt className="text-gray-400 text-xs">Portal Created</dt>
+              <dd className="text-xs">{new Date(createdAt).toLocaleString()}</dd>
             </div>
           )}
-          {activatedAt && (
+          {schedActivateAt && (
+            <div>
+              <dt className="text-gray-400 text-xs">⏰ Scheduled Activate</dt>
+              <dd className="text-xs">{new Date(schedActivateAt).toLocaleString()}</dd>
+            </div>
+          )}
+          {schedRevokeAt && (
+            <div>
+              <dt className="text-gray-400 text-xs">⏰ Scheduled Revoke</dt>
+              <dd className="text-xs">{new Date(schedRevokeAt).toLocaleString()}</dd>
+            </div>
+          )}
+          {enabledAt && (
+            <div>
+              <dt className="text-gray-400 text-xs">✅ Guest Mode Enabled</dt>
+              <dd className="text-xs font-medium text-green-700">{new Date(enabledAt).toLocaleString()}</dd>
+            </div>
+          )}
+          {disabledAt && (
+            <div>
+              <dt className="text-gray-400 text-xs">🔒 Guest Mode Disabled</dt>
+              <dd className="text-xs font-medium text-gray-600">{new Date(disabledAt).toLocaleString()}</dd>
+            </div>
+          )}
+          {activatedAt && !enabledAt && (
             <div>
               <dt className="text-gray-400 text-xs">Activated</dt>
-              <dd>{new Date(activatedAt).toLocaleString()}</dd>
+              <dd className="text-xs">{new Date(activatedAt).toLocaleString()}</dd>
             </div>
           )}
-          {revokedAt && (
+          {revokedAt && !disabledAt && (
             <div>
               <dt className="text-gray-400 text-xs">Revoked</dt>
-              <dd>{new Date(revokedAt).toLocaleString()}</dd>
+              <dd className="text-xs">{new Date(revokedAt).toLocaleString()}</dd>
             </div>
           )}
         </dl>
@@ -832,7 +860,11 @@ function GuestKeyPanel({ booking, onRefresh }) {
         </p>
 
         {/* ── Per-action status indicators ── */}
-        {(eraseStatus || guestModeCmd) && (
+        {/* Only show guestModeCmd badge when it's "failed" — if guest mode is now
+            active/disabled the status badge above already reflects the outcome,
+            so showing a stale "failed" label alongside "Guest Mode Active ✓" is
+            confusing. We suppress it once the command has clearly succeeded. */}
+        {(eraseStatus || (guestModeCmd && guestModeCmd === "failed" && gkStatus !== "guest_mode_active" && gkStatus !== "guest_mode_disabled")) && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-3 text-xs">
             {eraseStatus && (
               <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
@@ -843,13 +875,9 @@ function GuestKeyPanel({ booking, onRefresh }) {
                 🗑 Erase: {eraseStatus === "erased" ? `✓ Done${eraseAt ? ` (${new Date(eraseAt).toLocaleString()})` : ""}` : eraseStatus}
               </span>
             )}
-            {guestModeCmd && (
-              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
-                guestModeCmd === "success" ? "bg-green-100 text-green-700" :
-                guestModeCmd === "failed"  ? "bg-red-100 text-red-700" :
-                "bg-gray-100 text-gray-600"
-              }`}>
-                ⚡ Guest Mode cmd: {guestModeCmd}
+            {guestModeCmd && guestModeCmd === "failed" && gkStatus !== "guest_mode_active" && gkStatus !== "guest_mode_disabled" && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                ⚡ Guest Mode cmd: failed — retry above
               </span>
             )}
           </div>
@@ -921,6 +949,18 @@ export default function AdminBookingDetail() {
   const [adjLoading,  setAdjLoading]  = useState(false);
   const [adjMsg,      setAdjMsg]      = useState("");
   const [adjErr,      setAdjErr]      = useState("");
+
+  // E1/E3: Edit Booking panel state
+  const [showEdit,      setShowEdit]      = useState(false);
+  const [editName,      setEditName]      = useState("");
+  const [editPhone,     setEditPhone]     = useState("");
+  const [editEmail,     setEditEmail]     = useState("");
+  const [editTotal,     setEditTotal]     = useState("");
+  const [editNotes,     setEditNotes]     = useState("");
+  const [editPayMethod, setEditPayMethod] = useState("");
+  const [editSaving,    setEditSaving]    = useState(false);
+  const [editMsg,       setEditMsg]       = useState("");
+  const [editErr,       setEditErr]       = useState("");
 
   // Fetch vehicles once for display name lookup
   useEffect(() => {
@@ -1079,10 +1119,29 @@ export default function AdminBookingDetail() {
                 </dd>
               </div>
             )}
-            {booking.guestEmail && (
+            {(booking.guestEmail || booking.turoGuestEmail) && (
               <div>
                 <dt className="text-gray-400">Guest Email</dt>
                 <dd className="text-xs">{booking.guestEmail || booking.turoGuestEmail}</dd>
+              </div>
+            )}
+            {(booking.guestPhone || booking.turoGuestPhone) && (
+              <div>
+                <dt className="text-gray-400">Guest Phone</dt>
+                <dd className="text-xs font-mono">
+                  <a
+                    href={`tel:${booking.guestPhone || booking.turoGuestPhone}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {booking.guestPhone || booking.turoGuestPhone}
+                  </a>
+                </dd>
+              </div>
+            )}
+            {!(booking.guestPhone || booking.turoGuestPhone) && (
+              <div>
+                <dt className="text-gray-400">Guest Phone</dt>
+                <dd className="text-xs text-amber-600 italic">⚠ No phone number on file — SMS will fail</dd>
               </div>
             )}
           </dl>
@@ -1139,6 +1198,132 @@ export default function AdminBookingDetail() {
                 <button
                   onClick={() => { setShowAdjust(false); setAdjErr(""); }}
                   className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* E1/E3: Edit Booking Panel */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Edit Booking</h2>
+            {!showEdit && (
+              <button
+                onClick={() => {
+                  setEditName(booking.guestName || booking.turoGuestName || "");
+                  setEditPhone(booking.guestPhone || booking.turoGuestPhone || "");
+                  setEditEmail(booking.guestEmail || booking.turoGuestEmail || "");
+                  setEditTotal(booking.totalAmountCents != null ? String(Math.round(booking.totalAmountCents / 100 * 100) / 100) : "");
+                  setEditNotes(booking.notes || "");
+                  setEditPayMethod(booking.paymentMethod || "");
+                  setEditMsg(""); setEditErr("");
+                  setShowEdit(true);
+                }}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition"
+              >
+                ✏ Edit
+              </button>
+            )}
+          </div>
+
+          {!showEdit ? (
+            <dl className="grid grid-cols-2 gap-3 text-sm text-gray-600">
+              <div><dt className="text-gray-400">Guest Name</dt><dd>{booking.guestName || booking.turoGuestName || <span className="italic text-gray-300">—</span>}</dd></div>
+              <div><dt className="text-gray-400">Guest Phone</dt><dd>{booking.guestPhone || booking.turoGuestPhone || <span className="italic text-amber-500 text-xs">⚠ missing</span>}</dd></div>
+              <div><dt className="text-gray-400">Guest Email</dt><dd className="text-xs">{booking.guestEmail || booking.turoGuestEmail || <span className="italic text-gray-300">—</span>}</dd></div>
+              <div><dt className="text-gray-400">Total</dt><dd className="font-medium">{formatCents(booking.totalAmountCents)}</dd></div>
+              <div><dt className="text-gray-400">Payment Method</dt><dd className="capitalize">{(booking.paymentMethod || "—").replace(/_/g, " ")}</dd></div>
+              <div className="col-span-2"><dt className="text-gray-400">Notes</dt><dd className="text-xs">{booking.notes || <span className="italic text-gray-300">—</span>}</dd></div>
+            </dl>
+          ) : (
+            <div className="space-y-3">
+              {editMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">{editMsg}</div>}
+              {editErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{editErr}</div>}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Guest Name</label>
+                  <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                    placeholder="Full name"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Guest Phone</label>
+                  <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)}
+                    placeholder="+1 (555) 000-0000"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Guest Email</label>
+                  <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                    placeholder="guest@example.com"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Total Amount ($)</label>
+                  <input type="number" min="0" step="0.01" value={editTotal} onChange={e => setEditTotal(e.target.value)}
+                    placeholder="e.g. 350.00"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Payment Method</label>
+                  <select value={editPayMethod} onChange={e => setEditPayMethod(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">— unchanged —</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="stripe_payment_link">Stripe Payment Link</option>
+                    <option value="turo">Turo</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                  <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                    rows={2} placeholder="Internal notes about this booking…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  disabled={editSaving}
+                  onClick={async () => {
+                    setEditSaving(true); setEditMsg(""); setEditErr("");
+                    const payload = {};
+                    if (editName.trim())  payload.guestName  = editName.trim();
+                    if (editPhone.trim()) payload.guestPhone = editPhone.trim();
+                    if (editEmail.trim()) payload.guestEmail = editEmail.trim();
+                    if (editTotal !== "") {
+                      const cents = Math.round(parseFloat(editTotal) * 100);
+                      if (isNaN(cents) || cents < 0) { setEditErr("Invalid total amount."); setEditSaving(false); return; }
+                      payload.totalAmountCents = cents;
+                    }
+                    if (editNotes !== booking.notes) payload.notes = editNotes;
+                    if (editPayMethod) payload.paymentMethod = editPayMethod;
+                    if (!Object.keys(payload).length) { setEditErr("No changes to save."); setEditSaving(false); return; }
+                    try {
+                      await api.put(`/admin/bookings/${booking.bookingId}`, payload);
+                      setEditMsg("✓ Booking updated.");
+                      setShowEdit(false);
+                      reload();
+                    } catch (e) {
+                      setEditErr(e.response?.data?.error || e.message || "Save failed.");
+                    } finally {
+                      setEditSaving(false);
+                    }
+                  }}
+                  className="px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition"
+                >
+                  {editSaving ? "Saving…" : "Save Changes"}
+                </button>
+                <button
+                  onClick={() => { setShowEdit(false); setEditErr(""); setEditMsg(""); }}
+                  className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
                 >
                   Cancel
                 </button>

@@ -208,8 +208,15 @@ function VehicleCard({ v, telemetry, displayPositions, selectedVin, onSingleClic
           {tel.chargingState && tel.chargingState !== 'Disconnected' && tel.chargingState !== 'NoPower' && (
             <p>🔌 {tel.chargingState}</p>
           )}
-          {/* Door / trunk state — only show when something is open */}
+          {/* Door / trunk state — only show when something is open AND telemetry is fresh (<5 min).
+              D1: If telemetry is stale (>5 min old), the car is likely asleep and the door-open
+              value is a leftover from when it was last awake — suppress to avoid false alarms. */}
           {(() => {
+            const telTs = tel.timestamp || tel.updatedAt || '';
+            const isFresh = telTs
+              ? (Date.now() - new Date(telTs).getTime()) < 5 * 60 * 1000
+              : false;
+            if (!isFresh) return null;
             const doorMap = {
               'Front Driver':    tel.frontDriverDoorOpen,
               'Front Passenger': tel.frontPassengerDoorOpen,
@@ -646,8 +653,7 @@ export default function AdminMap() {
                               <td className="px-4 py-2">{Number(t.distanceMiles).toFixed(1)} mi</td>
                               <td className="px-4 py-2">{Number(t.maxSpeedMph).toFixed(0)} mph</td>
                               <td className="px-4 py-2">
-                                {(t.startBatteryPct != null && Number(t.startBatteryPct) > 0 &&
-                                  t.endBatteryPct != null && Number(t.endBatteryPct) > 0)
+                                {(t.startBatteryPct != null && t.endBatteryPct != null)
                                   ? `${(Number(t.startBatteryPct) - Number(t.endBatteryPct)).toFixed(0)}%`
                                   : '—'}
                               </td>

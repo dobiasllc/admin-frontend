@@ -8,18 +8,62 @@ import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
 import { API_BASE_URL } from '../config/const';
 
+// Curated list of common IANA timezone names for the business timezone picker.
+const TIMEZONE_OPTIONS = [
+  { value: 'America/New_York', label: 'Eastern Time (America/New_York)' },
+  { value: 'America/Chicago', label: 'Central Time (America/Chicago)' },
+  { value: 'America/Denver', label: 'Mountain Time (America/Denver)' },
+  { value: 'America/Phoenix', label: 'Mountain Time, no DST (America/Phoenix)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (America/Los_Angeles)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (America/Anchorage)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (Pacific/Honolulu)' },
+  { value: 'America/Toronto', label: 'Eastern Time (America/Toronto)' },
+  { value: 'America/Vancouver', label: 'Pacific Time (America/Vancouver)' },
+  { value: 'Europe/London', label: 'UK Time (Europe/London)' },
+  { value: 'Europe/Paris', label: 'Central European Time (Europe/Paris)' },
+  { value: 'Europe/Berlin', label: 'Central European Time (Europe/Berlin)' },
+  { value: 'Asia/Dubai', label: 'Gulf Standard Time (Asia/Dubai)' },
+  { value: 'Asia/Kolkata', label: 'India Standard Time (Asia/Kolkata)' },
+  { value: 'Asia/Singapore', label: 'Singapore Time (Asia/Singapore)' },
+  { value: 'Asia/Tokyo', label: 'Japan Standard Time (Asia/Tokyo)' },
+  { value: 'Australia/Sydney', label: 'Australian Eastern Time (Australia/Sydney)' },
+  { value: 'UTC', label: 'UTC' },
+];
+
 export default function AdminSettings() {
   const api = useApi();
   const [profile, setProfile]   = useState(null);
   const [loading, setLoading]   = useState(true);
   const [err, setErr]           = useState('');
 
+  const [timezone, setTimezone]           = useState('America/Chicago');
+  const [tzLoading, setTzLoading]         = useState(true);
+  const [tzSaving, setTzSaving]           = useState(false);
+  const [tzMessage, setTzMessage]         = useState('');
+  const [tzError, setTzError]             = useState('');
+
   useEffect(() => {
     api.get('/users/me')
       .then(r => setProfile(r.data))
       .catch(e => setErr(`Failed to load profile: ${e.response?.data?.error || e.message}`))
       .finally(() => setLoading(false));
+
+    api.get('/admin/settings')
+      .then(r => setTimezone(r.data?.timezone || 'America/Chicago'))
+      .catch(e => setTzError(`Failed to load settings: ${e.response?.data?.error || e.message}`))
+      .finally(() => setTzLoading(false));
   }, []);
+
+  const handleSaveTimezone = () => {
+    setTzSaving(true);
+    setTzMessage('');
+    setTzError('');
+    api.put('/admin/settings', { timezone })
+      .then(r => setTzMessage(r.data?.message || 'Business timezone updated'))
+      .catch(e => setTzError(`Failed to save timezone: ${e.response?.data?.error || e.message}`))
+      .finally(() => setTzSaving(false));
+  };
+
 
   const handleConnectTesla = () => {
     window.location.href = `${API_BASE_URL}/auth/tesla/login`;
@@ -46,7 +90,57 @@ export default function AdminSettings() {
           </div>
         ) : (
           <>
+            {/* ── Business Timezone ── */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-1">Business Timezone</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Controls how booking windows, guest portal access times, calendar exports,
+                and Tesla Guest Mode unlock/lock schedules are calculated and displayed.
+              </p>
+
+              {tzError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-3">{tzError}</div>
+              )}
+              {tzMessage && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 mb-3">{tzMessage}</div>
+              )}
+
+              {tzLoading ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {TIMEZONE_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleSaveTimezone}
+                    disabled={tzSaving}
+                    className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:opacity-50"
+                  >
+                    {tzSaving ? 'Saving…' : 'Save Timezone'}
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
+                <p>
+                  <strong className="text-gray-600">Note:</strong> Changing this affects future bookings and
+                  calculations. Existing scheduled EventBridge activate/revoke times are not retroactively
+                  recalculated.
+                </p>
+              </div>
+            </div>
+
             {/* ── Tesla Account ── */}
+
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">

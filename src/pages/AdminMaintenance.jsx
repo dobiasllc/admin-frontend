@@ -27,6 +27,16 @@ const MAINTENANCE_TYPES = [
   'Other',
 ];
 
+// C1: Auto-populate next service due date/mileage when type changes
+const MAINTENANCE_INTERVALS = {
+  'Oil Change':       { months: 6,  miles: 5000 },
+  'Tire Rotation':    { months: 6,  miles: 7500 },
+  'Tire Replacement': { months: 36, miles: 50000 },
+  'Brake Service':    { months: 24, miles: 30000 },
+  'Battery Service':  { months: 12, miles: null },
+  'Inspection':       { months: 12, miles: null },
+};
+
 function formatDate(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
@@ -56,6 +66,29 @@ function MaintenanceModal({ vehicles, record, onSave, onClose }) {
   const [err,         setErr]         = useState('');
 
   const inp = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+
+  // C1: Auto-populate next due date/mileage when type, performedAt, or mileage changes
+  // Only auto-fill if the field is currently empty (don't overwrite user edits)
+  useEffect(() => {
+    const interval = MAINTENANCE_INTERVALS[type];
+    if (!interval) return;
+
+    if (!nextDueDate && performedAt) {
+      try {
+        const base = new Date(performedAt);
+        base.setMonth(base.getMonth() + interval.months);
+        setNextDueDate(base.toISOString().slice(0, 10));
+      } catch { /* ignore */ }
+    }
+
+    if (!nextDueMileage && mileage && interval.miles) {
+      const base = parseInt(mileage, 10);
+      if (!isNaN(base)) {
+        setNextDueMileage(String(base + interval.miles));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, performedAt, mileage]);
 
   const handleSave = async () => {
     if (!vin || !description || !mileage || !performedAt) {
@@ -328,8 +361,16 @@ export default function AdminMaintenance() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {displayed.map((rec, i) => (
-                  <tr key={`${rec.vin}-${rec.timestamp || i}`} className="hover:bg-gray-50">
+                {displayed.map((rec, i) => {
+                  // C2: Row highlighting — overdue = red, due within 30 days = yellow
+                  const today = new Date();
+                  const in30  = new Date(); in30.setDate(today.getDate() + 30);
+                  const dueDate = rec.nextDueDate ? new Date(rec.nextDueDate) : null;
+                  const isOverdue    = dueDate && dueDate < today;
+                  const isApproaching = dueDate && !isOverdue && dueDate <= in30;
+                  const rowBg = isOverdue ? 'bg-red-50 hover:bg-red-100' : isApproaching ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50';
+                  return (
+                  <tr key={`${rec.vin}-${rec.timestamp || i}`} className={rowBg}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="font-medium text-gray-800 text-xs">{rec.vehicleName}</p>
                       <p className="text-xs text-gray-400 font-mono">{rec.vin}</p>
@@ -376,7 +417,8 @@ export default function AdminMaintenance() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

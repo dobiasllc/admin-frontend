@@ -717,6 +717,8 @@ export default function AdminCalendar() {
     const m = {};
     bookings.forEach(b => {
       if (!b.vin) return;
+      // Exclude cancelled bookings from the calendar view
+      if (b.status === 'canceled') return;
       if (!m[b.vin]) m[b.vin] = [];
       m[b.vin].push(b);
     });

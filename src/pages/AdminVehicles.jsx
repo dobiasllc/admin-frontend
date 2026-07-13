@@ -26,7 +26,13 @@ const BLANK_VEHICLE = {
   status: 'available', teslaEnabled: false, dailyRateCents: '',
   defaultSource: 'private', imageUrl: '', lockboxCode: '',
   freeMilesPerDay: '', teslaVehicleId: '', teslaAccountId: '', ownerUserId: '',
+  // Purchase price/date are still manually entered (one-time at acquisition)
+  purchasePrice: '', purchaseDate: '',
+  // Financing / TTR / registration (Analytics overhaul)
+  loanPrincipalCents: '', loanAPR: '', loanTermMonths: '', loanStartDate: '',
+  ttrCents: '', annualRegistrationCents: '',
 };
+
 
 export default function AdminVehicles() {
   const api = useApi();
@@ -45,6 +51,11 @@ export default function AdminVehicles() {
   const [maintForm, setMaintForm] = useState({ maintenanceType: 'other', description: '', mileageAtService: '', performedBy: '', cost: '', isPublic: false });
   const [revokeMsg, setRevokeMsg] = useState('');
   const [revokeErr, setRevokeErr] = useState('');
+
+  // OTDcheck valuation refresh state
+  const [refreshingVin, setRefreshingVin] = useState(null);
+  const [refreshMsg, setRefreshMsg]       = useState('');
+  const [refreshErr, setRefreshErr]       = useState('');
 
   const load = () => {
     setLoading(true);
@@ -106,6 +117,19 @@ export default function AdminVehicles() {
     }
   };
 
+  const handleRefreshValuation = async (vin) => {
+    setRefreshingVin(vin); setRefreshMsg(''); setRefreshErr('');
+    try {
+      const r = await api.post(`/admin/vehicles/${vin}/refresh-valuation`);
+      setRefreshMsg(`✓ Valuation refreshed for ${vin}${r.data?.valuation?.marketValue ? ` — market value: $${r.data.valuation.marketValue.toLocaleString()}` : ''}`);
+      load(); // reload cards so new value shows
+    } catch (e) {
+      setRefreshErr(e.response?.data?.error || `Valuation refresh failed for ${vin}`);
+    } finally {
+      setRefreshingVin(null);
+    }
+  };
+
   const handleMaintSave = async (e) => {
     e.preventDefault();
     try {
@@ -137,6 +161,8 @@ export default function AdminVehicles() {
         {err && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{err}</div>}
         {revokeMsg && <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">{revokeMsg}</div>}
         {revokeErr && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{revokeErr}</div>}
+        {refreshMsg && <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">{refreshMsg}</div>}
+        {refreshErr && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{refreshErr}</div>}
 
         {/* Vehicle form */}
         {showForm && (
@@ -179,7 +205,50 @@ export default function AdminVehicles() {
                   {['private', 'turo', 'both'].map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
+              {/* Acquisition cost — still manually entered once at purchase */}
+              <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Acquisition Cost</p>
+                <p className="text-xs text-gray-400 mb-3">
+                  Enter once at purchase. Market value is refreshed automatically each month via OTDcheck.
+                </p>
+              </div>
+              {[
+                ['purchasePrice', 'Purchase Price ($)', 'number'],
+                ['purchaseDate', 'Purchase Date', 'date'],
+                ['ttrCents', 'TTR — Tax/Title/Registration ($, one-time)', 'number'],
+                ['annualRegistrationCents', 'Annual Registration ($/yr)', 'number'],
+              ].map(([key, label, type]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                  <input type={type} value={form[key] || ''}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              ))}
+
+              {/* Financing — optional loan info for interest-to-date calculations */}
+              <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Financing (optional)</p>
+                <p className="text-xs text-gray-400 mb-3">
+                  If this vehicle is financed, enter the loan details to automatically compute interest paid to date.
+                </p>
+              </div>
+              {[
+                ['loanPrincipalCents', 'Loan Principal ($)', 'number'],
+                ['loanAPR', 'APR (e.g. 0.0649 for 6.49%)', 'number'],
+                ['loanTermMonths', 'Loan Term (months)', 'number'],
+                ['loanStartDate', 'Loan Start Date', 'date'],
+              ].map(([key, label, type]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                  <input type={type} step={key === 'loanAPR' ? '0.0001' : undefined} value={form[key] || ''}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              ))}
+
               <div className="col-span-2 flex items-center gap-2">
+
                 <input type="checkbox" id="teslaEnabled" checked={form.teslaEnabled}
                   onChange={e => setForm(f => ({ ...f, teslaEnabled: e.target.checked }))} />
                 <label htmlFor="teslaEnabled" className="text-sm text-gray-700">Tesla Enabled</label>
@@ -239,10 +308,61 @@ export default function AdminVehicles() {
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[v.status] || ''}`}>{STATUS_LABELS[v.status] || v.status}</span>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3">${((v.dailyRateCents || 0) / 100).toFixed(0)}/day</p>
+                  <p className="text-sm text-gray-600 mb-2">${((v.dailyRateCents || 0) / 100).toFixed(0)}/day</p>
+
+                  {/* OTDcheck valuation panel */}
+                  {(v.otdcheckMarketValue || v.otdcheckLastRefreshed) ? (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 mb-3 text-xs space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-indigo-700">📊 OTDcheck Market Value</span>
+                        {v.otdcheckRecallCount > 0 && (
+                          <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">
+                            {v.otdcheckRecallCount} recall{v.otdcheckRecallCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                      {v.otdcheckMarketValue && (
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-indigo-900 font-bold text-sm">${v.otdcheckMarketValue.toLocaleString()}</span>
+                          {v.otdcheckMarketValueSource && v.otdcheckMarketValueSource !== 'fair_price' && (
+                            <span className="text-indigo-400 text-xs">
+                              ({
+                                v.otdcheckMarketValueSource === 'listing' ? 'listing price' :
+                                v.otdcheckMarketValueSource === 'wholesale' ? 'wholesale est.' :
+                                'depreciation est.'
+                              })
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {v.otdcheckRetailMin && v.otdcheckRetailMax && (
+                        <div className="text-indigo-600">
+                          Retail range: ${v.otdcheckRetailMin.toLocaleString()} – ${v.otdcheckRetailMax.toLocaleString()}
+                        </div>
+                      )}
+                      {v.otdcheckLastRefreshed && (
+                        <div className="text-indigo-400">
+                          Refreshed: {new Date(v.otdcheckLastRefreshed).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg px-3 py-2 mb-3 text-xs text-gray-400">
+                      No valuation data yet — auto-refreshes monthly via OTDcheck.
+                    </div>
+                  )}
+
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => handleEdit(v)} className="text-xs border border-gray-300 text-gray-700 px-2 py-1 rounded hover:bg-gray-50 transition">Edit</button>
                     <button onClick={() => openMaint(v.vin)} className="text-xs border border-blue-300 text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition">Maintenance</button>
+                    <button
+                      onClick={() => handleRefreshValuation(v.vin)}
+                      disabled={refreshingVin === v.vin}
+                      className="text-xs border border-indigo-300 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-50 transition disabled:opacity-50"
+                      title="Fetch latest valuation from OTDcheck (counts against monthly quota)"
+                    >
+                      {refreshingVin === v.vin ? '⏳ Refreshing…' : '📊 Refresh Value'}
+                    </button>
                     {v.teslaEnabled && (
                       <button onClick={() => handleRevokeDrivers(v.vin)} className="text-xs border border-purple-300 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition" title="Remove all guest phone keys from this vehicle">🔑 Revoke Drivers</button>
                     )}

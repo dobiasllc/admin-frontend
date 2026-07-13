@@ -47,6 +47,9 @@ export default function AdminDashboard() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // C2: Maintenance due warnings
+  const [maintenanceWarnings, setMaintenanceWarnings] = useState([]);
+
   useEffect(() => {
     Promise.all([
       api.get('/admin/dashboard'),
@@ -57,6 +60,32 @@ export default function AdminDashboard() {
         setDash(dRes.data);
         setBookings((bRes.data || []).slice(0, 5));
         setProfile(pRes.data);
+
+        // C2: Fetch maintenance records for all vehicles and compute warnings
+        const vehicles = dRes.data?.vehicles || [];
+        const today = new Date();
+        const in30  = new Date(); in30.setDate(today.getDate() + 30);
+        Promise.allSettled(
+          vehicles.map(v =>
+            api.get(`/admin/vehicles/${v.vin}/maintenance`)
+              .then(r => (r.data || []).map(rec => ({
+                ...rec,
+                vin: v.vin,
+                vehicleName: `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim() || v.vin,
+              })))
+          )
+        ).then(results => {
+          const allRecs = results
+            .filter(r => r.status === 'fulfilled')
+            .flatMap(r => r.value);
+          const warnings = allRecs.filter(rec => {
+            if (!rec.nextDueDate) return false;
+            const due = new Date(rec.nextDueDate);
+            return due <= in30; // overdue OR due within 30 days
+          });
+          warnings.sort((a, b) => (a.nextDueDate || '').localeCompare(b.nextDueDate || ''));
+          setMaintenanceWarnings(warnings);
+        }).catch(() => {});
       })
       .catch(e => setErr(`API error: ${e.response?.status} — ${e.response?.data?.error || e.message}`))
       .finally(() => setLoading(false));
@@ -120,33 +149,66 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* ── Tesla Account status (compact) ── */}
-        <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 ${
-          teslaStored ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
-          <div className="flex items-center gap-3">
-            <span className="text-lg">{teslaStored ? '✅' : '🔌'}</span>
-            <div>
-              <p className="text-sm font-semibold text-gray-800">
-                Tesla Account {teslaStored ? 'Connected' : 'Not Connected'}
-              </p>
-              {teslaStored && teslaConnectedAt && (
-                <p className="text-xs text-gray-500">
-                  Last authorized {new Date(teslaConnectedAt).toLocaleDateString()}
-                </p>
-              )}
-              {!teslaStored && (
-                <p className="text-xs text-red-700">OAuth tokens required for vehicle commands and guest keys.</p>
-              )}
+        {/* ── C2: Maintenance Due Warnings ── */}
+        {maintenanceWarnings.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-amber-600 text-base">🔧</span>
+              <h2 className="text-sm font-semibold text-amber-800">
+                Maintenance Due ({maintenanceWarnings.length} item{maintenanceWarnings.length !== 1 ? 's' : ''})
+              </h2>
+              <Link to="/maintenance" className="ml-auto text-xs text-amber-700 hover:underline font-medium">View all →</Link>
             </div>
+            {maintenanceWarnings.map((rec, i) => {
+              const today = new Date();
+              const due   = new Date(rec.nextDueDate);
+              const isOverdue = due < today;
+              return (
+                <div key={`${rec.vin}-${rec.timestamp || i}`}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs ${isOverdue ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}
+                >
+                  <span>{isOverdue ? '🔴' : '🟡'}</span>
+                  <span className="font-medium">{rec.vehicleName}</span>
+                  <span className="text-gray-600">·</span>
+                  <span>{rec.maintenanceType}</span>
+                  <span className="ml-auto font-medium">
+                    {isOverdue ? 'Overdue' : 'Due'}: {new Date(rec.nextDueDate).toLocaleDateString()}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <Link
-            to="/settings"
-            className="shrink-0 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
-          >
-            ⚙ Settings
-          </Link>
-        </div>
+        )}
+
+        {/* ── Tesla Account status ── */}
+        {/* When connected: compact single-line indicator to save space */}
+        {/* When not connected: full warning card */}
+        {teslaStored ? (
+          <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800">
+            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span className="font-medium">Tesla ✓</span>
+            {teslaConnectedAt && (
+              <span className="text-green-600">· authorized {new Date(teslaConnectedAt).toLocaleDateString()}</span>
+            )}
+            <Link to="/settings" className="ml-auto text-green-700 hover:underline font-medium">Settings →</Link>
+          </div>
+        ) : (
+          <div className="rounded-xl border bg-red-50 border-red-200 p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">🔌</span>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Tesla Account Not Connected</p>
+                <p className="text-xs text-red-700">OAuth tokens required for vehicle commands and guest keys.</p>
+              </div>
+            </div>
+            <Link
+              to="/settings"
+              className="shrink-0 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+            >
+              ⚙ Connect Tesla
+            </Link>
+          </div>
+        )}
 
         {/* ── Vehicle cards ── */}
         <div>

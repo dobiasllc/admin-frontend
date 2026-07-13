@@ -135,9 +135,23 @@ export default function AdminCreateBooking() {
     });
     api.get(`/vehicles/available?${params}`)
       .then(r => {
-        const available = r.data?.available !== false;
-        if (!available) {
-          const conflict = r.data?.conflict;
+        // The endpoint returns either:
+        //   { available: bool, conflict: {...} }  (single-VIN check)
+        //   an array of available VIN strings     (multi-vehicle list)
+        const data = r.data;
+        let isAvailable;
+        if (Array.isArray(data)) {
+          // Array of available VINs — check if our VIN is in the list
+          isAvailable = data.includes(vin);
+        } else if (data && typeof data.available === 'boolean') {
+          isAvailable = data.available;
+        } else {
+          // Unexpected shape — treat as available to avoid false blocks
+          isAvailable = true;
+        }
+
+        if (!isAvailable) {
+          const conflict = Array.isArray(data) ? null : data?.conflict;
           const msg = conflict
             ? `Conflict with booking ${(conflict.bookingId || '').slice(0,12)}… (${conflict.startTime?.slice(0,10)} → ${conflict.endTime?.slice(0,10)})`
             : "Vehicle is not available for these dates.";
