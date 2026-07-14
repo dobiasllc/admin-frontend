@@ -5,7 +5,9 @@ import './index.css';
 import App from './App';
 import { AuthProvider as OIDCProvider } from "react-oidc-context";
 import { AuthProvider as CustomAuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Log, WebStorageStateStore } from "oidc-client-ts";
+
 
 const cognitoAuthConfig = {
   // MUST start with https:// and have a / before the User Pool ID
@@ -39,7 +41,10 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <OIDCProvider {...cognitoAuthConfig} onSigninCallback={onSigninCallback}>
     <CustomAuthProvider>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </CustomAuthProvider>
+
   </OIDCProvider>
 );

@@ -5,8 +5,10 @@
  */
 import { useState, useEffect } from 'react';
 import { useApi } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import AdminLayout from '../components/AdminNav';
 import { API_BASE_URL } from '../config/const';
+
 
 // Curated list of common IANA timezone names for the business timezone picker.
 const TIMEZONE_OPTIONS = [
@@ -32,6 +34,8 @@ const TIMEZONE_OPTIONS = [
 
 export default function AdminSettings() {
   const api = useApi();
+  const { darkMode, loading: dmLoading, toggleDarkMode } = useTheme();
+
   const [profile, setProfile]   = useState(null);
   const [loading, setLoading]   = useState(true);
   const [err, setErr]           = useState('');
@@ -76,9 +80,10 @@ export default function AdminSettings() {
     <AdminLayout>
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Admin configuration and account connections.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Admin configuration and account connections.</p>
         </div>
+
 
         {err && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{err}</div>
@@ -91,9 +96,10 @@ export default function AdminSettings() {
         ) : (
           <>
             {/* ── Business Timezone ── */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-1">Business Timezone</h2>
-              <p className="text-sm text-gray-500 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Business Timezone</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+
                 Controls how booking windows, guest portal access times, calendar exports,
                 and Tesla Guest Mode unlock/lock schedules are calculated and displayed.
               </p>
@@ -114,8 +120,9 @@ export default function AdminSettings() {
                   <select
                     value={timezone}
                     onChange={(e) => setTimezone(e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
+
                     {TIMEZONE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
@@ -130,27 +137,60 @@ export default function AdminSettings() {
                 </div>
               )}
 
-              <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400">
                 <p>
-                  <strong className="text-gray-600">Note:</strong> Changing this affects future bookings and
+                  <strong className="text-gray-600 dark:text-gray-300">Note:</strong> Changing this affects future bookings and
+
                   calculations. Existing scheduled EventBridge activate/revoke times are not retroactively
                   recalculated.
                 </p>
               </div>
             </div>
 
+            {/* ── Appearance ── */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Appearance</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Toggle dark mode for the admin portal. This preference is saved to your business
+                settings and applies across all devices and sessions.
+              </p>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {darkMode ? 'Dark Mode' : 'Light Mode'}
+                </span>
+                <button
+                  onClick={toggleDarkMode}
+                  disabled={dmLoading}
+                  role="switch"
+                  aria-checked={darkMode}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                    darkMode ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      darkMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
             {/* ── Tesla Account ── */}
 
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl ${
-                    teslaStored ? 'bg-green-100' : 'bg-gray-100'
+                    teslaStored ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'
                   }`}>
                     {teslaStored ? '✅' : '🔌'}
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-gray-900">Tesla Account</h2>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Tesla Account</h2>
+
                     {teslaStored ? (
                       <p className="text-sm text-green-700 mt-0.5">
                         Connected
@@ -179,17 +219,18 @@ export default function AdminSettings() {
                 </button>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 space-y-1">
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400 space-y-1">
                 <p>
-                  <strong className="text-gray-600">When to re-authorize:</strong> Only needed if you see
+                  <strong className="text-gray-600 dark:text-gray-300">When to re-authorize:</strong> Only needed if you see
                   "token expired" errors in CloudWatch, or if you revoked access from your Tesla account.
                 </p>
                 <p>
-                  <strong className="text-gray-600">Auto-refresh:</strong> Tokens are refreshed automatically
+                  <strong className="text-gray-600 dark:text-gray-300">Auto-refresh:</strong> Tokens are refreshed automatically
                   every 6 hours by the token refresher Lambda — no manual action needed under normal operation.
                 </p>
                 <p>
-                  <strong className="text-gray-600">OAuth flow:</strong> Clicking the button above will redirect
+                  <strong className="text-gray-600 dark:text-gray-300">OAuth flow:</strong> Clicking the button above will redirect
+
                   you to Tesla's login page. After authorizing, you'll be redirected back to the dashboard.
                 </p>
               </div>
@@ -197,9 +238,9 @@ export default function AdminSettings() {
 
             {/* ── Admin Profile ── */}
             {profile && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Admin Profile</h2>
-                <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Admin Profile</h2>
+                <dl className="grid grid-cols-2 gap-3 text-sm text-gray-900 dark:text-gray-100">
                   <div>
                     <dt className="text-gray-400">Name</dt>
                     <dd className="font-medium">{profile.fullName || profile.name || '—'}</dd>
@@ -210,7 +251,7 @@ export default function AdminSettings() {
                   </div>
                   <div>
                     <dt className="text-gray-400">User ID</dt>
-                    <dd className="font-mono text-xs text-gray-500">{profile.userId || profile.sub || '—'}</dd>
+                    <dd className="font-mono text-xs text-gray-500 dark:text-gray-400">{profile.userId || profile.sub || '—'}</dd>
                   </div>
                   <div>
                     <dt className="text-gray-400">Tier</dt>
@@ -218,6 +259,7 @@ export default function AdminSettings() {
                   </div>
                 </dl>
               </div>
+
             )}
           </>
         )}

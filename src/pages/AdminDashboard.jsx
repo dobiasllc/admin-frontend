@@ -131,23 +131,24 @@ export default function AdminDashboard() {
 
         {/* ── Page header ── */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fleet Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Overview of your fleet, bookings, and account status.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fleet Dashboard</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Overview of your fleet, bookings, and account status.</p>
         </div>
 
         {/* ── Stats row ── */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Active Rentals',    value: dash?.active_rentals    || 0, color: 'text-green-600' },
-            { label: 'Confirmed',         value: dash?.confirmed_bookings || 0, color: 'text-blue-600' },
-            { label: 'Pending',           value: dash?.pending_bookings   || 0, color: 'text-yellow-600' },
+            { label: 'Active Rentals',    value: dash?.active_rentals    || 0, color: 'text-green-600 dark:text-green-400' },
+            { label: 'Confirmed',         value: dash?.confirmed_bookings || 0, color: 'text-blue-600 dark:text-blue-400' },
+            { label: 'Pending',           value: dash?.pending_bookings   || 0, color: 'text-yellow-600 dark:text-yellow-400' },
           ].map(s => (
-            <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-5 text-center">
+            <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 text-center">
               <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
-              <p className="text-sm text-gray-500 mt-1">{s.label}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
+
 
         {/* ── C2: Maintenance Due Warnings ── */}
         {maintenanceWarnings.length > 0 && (
@@ -213,7 +214,7 @@ export default function AdminDashboard() {
         {/* ── Vehicle cards ── */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">Fleet</h2>
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Fleet</h2>
             <Link to="/vehicles" className="text-sm text-blue-600 hover:underline">Manage vehicles →</Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -223,13 +224,14 @@ export default function AdminDashboard() {
               const guestName    = v.currentGuestName || '';
               const bookingId    = v.currentBookingId || '';
               return (
-              <div key={v.vin} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div key={v.vin} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 {v.imageUrl && (
                   <img src={v.imageUrl} alt={v.model} className="w-full h-32 object-cover" />
                 )}
                 <div className="p-4">
-                  <p className="font-semibold text-gray-800 text-sm">{v.year} {v.make} {v.model}</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{v.year} {v.make} {v.model}</p>
                   <p className="text-xs text-gray-400 mb-2">{v.licensePlate}</p>
+
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[v.status] || 'bg-gray-100 text-gray-500'}`}>
                       {STATUS_LABELS[v.status] || v.status}
@@ -284,24 +286,25 @@ export default function AdminDashboard() {
         {/* ── Upcoming confirmed bookings ── */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">Upcoming Confirmed Bookings</h2>
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Upcoming Confirmed Bookings</h2>
             <Link to="/bookings" className="text-sm text-blue-600 hover:underline">View all →</Link>
           </div>
           {bookings.length === 0 ? (
             <p className="text-gray-400 text-sm">No upcoming confirmed bookings.</p>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     {['Booking ID', 'Vehicle', 'Start', 'End', 'Source', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-gray-800 dark:text-gray-200">
                   {bookings.map(b => (
-                    <tr key={b.bookingId || b.PK} className="hover:bg-gray-50">
+                    <tr key={b.bookingId || b.PK} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+
                       <td className="px-4 py-3 font-mono text-xs text-gray-500">{(b.bookingId || '').slice(0, 12)}…</td>
                       <td className="px-4 py-3">{b.vin}</td>
                       <td className="px-4 py-3">{new Date(b.startTime).toLocaleDateString()}</td>

@@ -110,21 +110,21 @@ export default function AdminBookings() {
       <tr
         key={b.bookingId || b.turoReservationId || Math.random()}
         onClick={() => b.bookingId && navigate(`/bookings/${b.bookingId}`)}
-        className={`hover:bg-blue-50 transition-colors ${b.bookingId ? 'cursor-pointer' : 'cursor-default'}`}
+        className={`hover:bg-blue-50 dark:hover:bg-gray-700/40 transition-colors ${b.bookingId ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <td className="px-4 py-3 font-mono text-xs text-gray-400 hidden sm:table-cell">
+        <td className="px-4 py-3 font-mono text-xs text-gray-400 dark:text-gray-500 hidden sm:table-cell">
           {shortId(b.bookingId)}
         </td>
-        <td className="px-4 py-3 font-medium text-gray-800">
+        <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">
           {vehicleLabel(b.vin)}
         </td>
-        <td className="px-4 py-3 text-gray-600 text-xs">
+        <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">
           {b.guestName || b.turoGuestName || b.userId || '—'}
         </td>
-        <td className="px-4 py-3 text-gray-600">
+        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
           {b.startTime ? new Date(b.startTime).toLocaleDateString() : '—'}
         </td>
-        <td className="px-4 py-3 text-gray-600">
+        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
           {b.endTime ? new Date(b.endTime).toLocaleDateString() : '—'}
         </td>
         <td className="px-4 py-3">
@@ -135,12 +135,13 @@ export default function AdminBookings() {
         <td className="px-4 py-3">
           {b.source === 'turo'
             ? <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">Turo</span>
-            : <span className="capitalize text-gray-600 text-xs">{b.source || 'private'}</span>
+            : <span className="capitalize text-gray-600 dark:text-gray-400 text-xs">{b.source || 'private'}</span>
           }
         </td>
-        <td className="px-4 py-3 text-gray-700">
+        <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
           ${((b.totalAmountCents || 0) / 100).toFixed(2)}
         </td>
+
         {/* Guest Mode badge — only shown for Tesla bookings that have a guestKeyStatus */}
         <td className="px-4 py-3">
           {guestModeActive ? (
@@ -162,20 +163,21 @@ export default function AdminBookings() {
   };
 
   const tableHeader = (
-    <thead className="bg-gray-50 border-b border-gray-200">
+    <thead className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
       <tr>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">ID</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Vehicle</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Renter</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Start</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">End</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Source</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Total</th>
-        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Guest Mode</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">ID</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Vehicle</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Renter</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Start</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">End</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Source</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Total</th>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Guest Mode</th>
       </tr>
     </thead>
   );
+
 
   return (
     <AdminLayout>
@@ -184,7 +186,7 @@ export default function AdminBookings() {
 
           {/* Page header */}
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Bookings</h1>
             <Link
               to="/bookings/new"
               className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -194,17 +196,17 @@ export default function AdminBookings() {
           </div>
 
           {/* ── Compact filter bar ── */}
-          <div className="flex flex-wrap items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Filter</span>
+          <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3">
+            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Filter</span>
 
             {/* Status dropdown */}
             <div className="flex items-center gap-1.5">
-              <label htmlFor="status-filter" className="text-sm text-gray-500 whitespace-nowrap">Status</label>
+              <label htmlFor="status-filter" className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Status</label>
               <select
                 id="status-filter"
                 value={status}
                 onChange={e => setFilter('status', e.target.value)}
-                className="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
                 <option value="">All</option>
                 <option value="pending">Pending</option>
@@ -218,12 +220,12 @@ export default function AdminBookings() {
 
             {/* Source dropdown */}
             <div className="flex items-center gap-1.5">
-              <label htmlFor="source-filter" className="text-sm text-gray-500 whitespace-nowrap">Source</label>
+              <label htmlFor="source-filter" className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Source</label>
               <select
                 id="source-filter"
                 value={source}
                 onChange={e => setFilter('source', e.target.value)}
-                className="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
                 <option value="">All Sources</option>
                 <option value="private">Private</option>
@@ -235,7 +237,7 @@ export default function AdminBookings() {
             {(status || source) && (
               <button
                 onClick={() => setParams({})}
-                className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline"
+                className="ml-auto text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline"
               >
                 Clear filters
               </button>
@@ -262,26 +264,26 @@ export default function AdminBookings() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
           ) : bookings.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-12">No bookings found.</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm text-center py-12">No bookings found.</p>
           ) : (
             <div className="space-y-4">
 
               {/* ── Upcoming / Today section ── */}
               {upcoming.length > 0 && (
-                <div className="bg-white rounded-xl border border-blue-200 overflow-hidden shadow-sm">
-                  <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center gap-2">
-                    <span className="text-blue-600 text-sm">📅</span>
-                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-blue-200 dark:border-blue-800/50 overflow-hidden shadow-sm">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800/40 px-4 py-2 flex items-center gap-2">
+                    <span className="text-blue-600 dark:text-blue-400 text-sm">📅</span>
+                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
                       Upcoming &amp; Today
                     </span>
-                    <span className="ml-auto text-xs text-blue-500 font-medium">
+                    <span className="ml-auto text-xs text-blue-500 dark:text-blue-400 font-medium">
                       {upcoming.length} booking{upcoming.length !== 1 ? 's' : ''}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[640px]">
                       {tableHeader}
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {upcoming.map(renderRow)}
                       </tbody>
                     </table>
@@ -291,8 +293,8 @@ export default function AdminBookings() {
 
               {/* ── Past section ── */}
               {past.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden opacity-90">
-                  <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden opacity-90">
+                  <div className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2">
                     <span className="text-gray-400 text-sm">🕐</span>
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                       Past Bookings
@@ -304,7 +306,7 @@ export default function AdminBookings() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[640px]">
                       {tableHeader}
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {past.map(renderRow)}
                       </tbody>
                     </table>
@@ -315,7 +317,7 @@ export default function AdminBookings() {
             </div>
           )}
 
-          <p className="text-xs text-gray-400 text-right">
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-right">
             {bookings.length} booking{bookings.length !== 1 ? 's' : ''} shown
           </p>
         </div>

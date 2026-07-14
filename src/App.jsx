@@ -12,6 +12,7 @@ import AdminAnalytics from './pages/AdminAnalytics';
 import AdminTaxes from './pages/AdminTaxes';
 import AdminTuroGuests from './pages/AdminTuroGuests';
 import AdminVehicles from './pages/AdminVehicles';
+import AdminVehicleDetail from './pages/AdminVehicleDetail';
 import AdminMap from './pages/AdminMap';
 import AdminGuestKeys from './pages/AdminGuestKeys';
 import AdminCreateBooking from './pages/AdminCreateBooking';
@@ -54,6 +55,9 @@ function App() {
         />
         <Route path="/vehicles"
           element={<AdminRoute><AdminVehicles /></AdminRoute>}
+        />
+        <Route path="/vehicles/:vin"
+          element={<AdminRoute><AdminVehicleDetail /></AdminRoute>}
         />
         <Route path="/calendar"
           element={<AdminRoute><AdminCalendar /></AdminRoute>}
