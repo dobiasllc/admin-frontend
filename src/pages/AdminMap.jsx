@@ -425,16 +425,16 @@ export default function AdminMap() {
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Live Map</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Live Map</h1>
           <div className="flex items-center gap-3">
             {lastUpdated && (
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 dark:text-gray-500">
                 Updated {lastUpdated.toLocaleTimeString()}
               </span>
             )}
             <button
               onClick={refreshTelemetry}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50 shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50 shadow-sm dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -446,15 +446,15 @@ export default function AdminMap() {
         </div>
 
         {err && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono">{err}</div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono dark:bg-red-900/20">{err}</div>
         )}
 
         <div className="flex flex-col lg:flex-row gap-4">
 
           {/* Desktop sidebar */}
           <div className="hidden lg:flex lg:flex-col lg:w-56 xl:w-64 gap-3 flex-shrink-0">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tesla Vehicles</h2>
-            {vehicles.length === 0 && <p className="text-gray-400 text-sm">No Tesla vehicles found.</p>}
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Tesla Vehicles</h2>
+            {vehicles.length === 0 && <p className="text-gray-400 text-sm dark:text-gray-500">No Tesla vehicles found.</p>}
             {vehicles.map(v => (
               <VehicleCard key={v.vin} v={v}
                 telemetry={telemetry} displayPositions={displayPositions}
@@ -468,7 +468,7 @@ export default function AdminMap() {
 
             <MapErrorBoundary>
               <div
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700"
                 style={{ height: '480px', isolation: 'isolate' }}
               >
                 <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }}>
@@ -582,7 +582,7 @@ export default function AdminMap() {
             </MapErrorBoundary>
 
             {/* Map legend */}
-            <div className="flex flex-wrap gap-4 text-xs text-gray-500 px-1">
+            <div className="flex flex-wrap gap-4 text-xs text-gray-500 px-1 dark:text-gray-400">
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border-2 border-green-600 bg-gray-200" /> Live / Moving (&gt;{MOVING_SPEED_THRESHOLD_MPH} mph)</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border-2 border-blue-600 bg-gray-200" /> Parked (last known)</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-green-600" /> Trip Start</span>
@@ -592,9 +592,9 @@ export default function AdminMap() {
 
             {/* Mobile vehicle cards */}
             <div className="lg:hidden">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tesla Vehicles</h2>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Tesla Vehicles</h2>
               {vehicles.length === 0
-                ? <p className="text-gray-400 text-sm">No Tesla vehicles found.</p>
+                ? <p className="text-gray-400 text-sm dark:text-gray-500">No Tesla vehicles found.</p>
                 : (
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                     {vehicles.map(v => (
@@ -610,9 +610,9 @@ export default function AdminMap() {
 
             {/* Trip list */}
             {selectedVin && (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-700">
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     Recent Trips — {selectedVin} (last 7 days)
                   </h3>
                   {tripLoading && (
@@ -626,28 +626,28 @@ export default function AdminMap() {
                 {tripsLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-                    <span className="ml-3 text-sm text-gray-500">Loading trips…</span>
+                    <span className="ml-3 text-sm text-gray-500 dark:text-gray-400">Loading trips…</span>
                   </div>
                 ) : trips.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-sm text-gray-400">
+                  <div className="px-4 py-6 text-center text-sm text-gray-400 dark:text-gray-500">
                     No trips recorded in the last 7 days for this vehicle.
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-50 dark:bg-gray-900/40">
                         <tr>
                           {['Start', 'End', 'Distance', 'Max Speed', 'Battery Used', 'Route'].map(h => (
-                            <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                            <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 whitespace-nowrap dark:text-gray-400">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {trips.map((t, i) => {
                           const isActive  = activeTrip?.startTime === t.startTime;
                           const hasCoords = t.startLatitude && t.startLongitude;
                           return (
-                            <tr key={i} className={`transition ${isActive ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                            <tr key={i} className={`transition ${isActive ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40'}`}>
                               <td className="px-4 py-2 whitespace-nowrap">{new Date(t.startTime).toLocaleString()}</td>
                               <td className="px-4 py-2 whitespace-nowrap">{new Date(t.endTime).toLocaleString()}</td>
                               <td className="px-4 py-2">{Number(t.distanceMiles).toFixed(1)} mi</td>
@@ -662,7 +662,7 @@ export default function AdminMap() {
                                   <button
                                     onClick={() => loadTripDetail(selectedVin, t)}
                                     className={`text-xs px-2 py-1 rounded transition ${
-                                      isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-blue-600 hover:bg-blue-50'
+                                      isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-blue-600 hover:bg-blue-50 dark:bg-blue-900/20'
                                     }`}
                                   >
                                     {isActive ? 'Hide' : 'Show'}

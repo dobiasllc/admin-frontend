@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useApi } from "../context/AuthContext";
 import AdminLayout from "../components/AdminNav";
+import { normalisePortalUrl } from "../utils/guestPortal";
 
 function formatCents(c) { return `$${((c || 0) / 100).toFixed(2)}`; }
 
@@ -21,14 +22,14 @@ const STATUS_COLORS = {
   pending:   "bg-yellow-100 text-yellow-700",
   confirmed: "bg-blue-100 text-blue-700",
   active:    "bg-green-100 text-green-700",
-  completed: "bg-gray-100 text-gray-600",
+  completed: "bg-gray-100 text-gray-600 dark:text-gray-300",
   canceled:  "bg-red-100 text-red-700",
 };
 
 const GK_STATUS_COLORS = {
   page_ready:          "bg-blue-100 text-blue-700",
   guest_mode_active:   "bg-green-100 text-green-700",
-  guest_mode_disabled: "bg-gray-100 text-gray-600",
+  guest_mode_disabled: "bg-gray-100 text-gray-600 dark:text-gray-300",
   failed:              "bg-red-200 text-red-900",
 };
 
@@ -86,33 +87,33 @@ function StripePaymentPanel({ booking, onRefresh }) {
   const depositBadge = depositStatus === "held"
     ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Deposit Held</span>
     : depositStatus === "released"
-    ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Deposit Released</span>
+    ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:text-gray-400">Deposit Released</span>
     : depositStatus === "captured"
     ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Deposit Captured</span>
     : null;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Stripe Payment Link</h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Stripe Payment Link</h2>
         <div className="flex items-center gap-2">
           {paymentBadge}
           {depositBadge}
         </div>
       </div>
 
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{err}</div>}
+      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
+      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
 
       {/* Pricing summary */}
-      <div className="mb-4 text-sm text-gray-600 space-y-0.5">
+      <div className="mb-4 text-sm text-gray-600 space-y-0.5 dark:text-gray-300">
         <div className="flex justify-between">
-          <span className="text-gray-400">Rental total</span>
+          <span className="text-gray-400 dark:text-gray-500">Rental total</span>
           <span className="font-medium">${((totalCents || 0) / 100).toFixed(2)}</span>
         </div>
         {depositCents > 0 && (
           <div className="flex justify-between">
-            <span className="text-gray-400">Deposit hold</span>
+            <span className="text-gray-400 dark:text-gray-500">Deposit hold</span>
             <span className="font-medium">${(depositCents / 100).toFixed(2)}</span>
           </div>
         )}
@@ -120,12 +121,12 @@ function StripePaymentPanel({ booking, onRefresh }) {
 
       {/* Deposit toggle — only show before link is generated */}
       {!hasLink && !isPaid && depositCents > 0 && (
-        <label className="flex items-center gap-2 text-sm text-gray-700 mb-4 cursor-pointer select-none">
+        <label className="flex items-center gap-2 text-sm text-gray-700 mb-4 cursor-pointer select-none dark:text-gray-300">
           <input
             type="checkbox"
             checked={includeDeposit}
             onChange={e => setIncludeDeposit(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 dark:border-gray-600"
           />
           Include ${(depositCents / 100).toFixed(2)} deposit hold (placed automatically after renter pays)
         </label>
@@ -134,7 +135,7 @@ function StripePaymentPanel({ booking, onRefresh }) {
       {/* Generated link */}
       {hasLink && (
         <div className="mb-4">
-          <p className="text-xs text-gray-500 mb-1.5">
+          <p className="text-xs text-gray-500 mb-1.5 dark:text-gray-400">
             {isPaid ? "Payment completed." : "Send this link to the renter — expires 24 hours after generation."}
           </p>
           <div className="flex gap-2">
@@ -142,11 +143,11 @@ function StripePaymentPanel({ booking, onRefresh }) {
               type="text"
               readOnly
               value={checkoutUrl}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-mono bg-gray-50 text-gray-700 truncate"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-mono bg-gray-50 text-gray-700 truncate dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-700"
             />
             <button
               onClick={handleCopy}
-              className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition whitespace-nowrap"
+              className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition whitespace-nowrap dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
             >
               {copied ? "✓ Copied!" : "Copy"}
             </button>
@@ -174,7 +175,7 @@ function StripePaymentPanel({ booking, onRefresh }) {
       )}
 
       {isPaid && booking.paymentConfirmedAt && (
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-gray-400 mt-2 dark:text-gray-500">
           Paid {new Date(booking.paymentConfirmedAt).toLocaleString()}
         </p>
       )}
@@ -215,52 +216,52 @@ function MarkPaidPanel({ booking, onRefresh }) {
     : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Unpaid</span>;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Payment</h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Payment</h2>
         {paymentBadge}
       </div>
 
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{err}</div>}
+      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
+      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
 
       {/* Pricing summary */}
-      <div className="mb-4 text-sm text-gray-600 space-y-0.5">
+      <div className="mb-4 text-sm text-gray-600 space-y-0.5 dark:text-gray-300">
         <div className="flex justify-between">
-          <span className="text-gray-400">Rental total</span>
+          <span className="text-gray-400 dark:text-gray-500">Rental total</span>
           <span className="font-medium">{formatCents(booking.totalAmountCents)}</span>
         </div>
         {booking.depositAmountCents > 0 && (
           <div className="flex justify-between">
-            <span className="text-gray-400">Deposit</span>
+            <span className="text-gray-400 dark:text-gray-500">Deposit</span>
             <span className="font-medium">{formatCents(booking.depositAmountCents)}</span>
           </div>
         )}
       </div>
 
       {isPaid ? (
-        <div className="text-sm text-gray-600 space-y-1">
+        <div className="text-sm text-gray-600 space-y-1 dark:text-gray-300">
           <p>
-            <span className="text-gray-400">Method: </span>
+            <span className="text-gray-400 dark:text-gray-500">Method: </span>
             <span className="capitalize font-medium">{booking.paymentMethod?.replace(/_/g, " ") || "—"}</span>
           </p>
           {booking.paymentConfirmedAt && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               Confirmed {new Date(booking.paymentConfirmedAt).toLocaleString()}
             </p>
           )}
           {booking.paymentNotes && (
-            <p className="text-xs text-gray-500 italic">"{booking.paymentNotes}"</p>
+            <p className="text-xs text-gray-500 italic dark:text-gray-400">"{booking.paymentNotes}"</p>
           )}
         </div>
       ) : (
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Payment Method</label>
+            <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Payment Method</label>
             <select
               value={method}
               onChange={e => setMethod(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-600"
             >
               <option value="bank_transfer">Bank Transfer</option>
               <option value="zelle">Zelle</option>
@@ -271,13 +272,13 @@ function MarkPaidPanel({ booking, onRefresh }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notes (optional)</label>
+            <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Notes (optional)</label>
             <input
               type="text"
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder={`e.g. "Received $350 via Zelle on 7/7"`}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-600"
             />
           </div>
           <button
@@ -296,7 +297,7 @@ function MarkPaidPanel({ booking, onRefresh }) {
 // ── Contract & Documents Panel ────────────────────────────────────────────────
 // (Only shown for non-Turo bookings — see Issue 4)
 const CONTRACT_STATUS_LABELS = {
-  not_required:      { label: "Not Required",       color: "bg-gray-100 text-gray-500" },
+  not_required:      { label: "Not Required",       color: "bg-gray-100 text-gray-500 dark:text-gray-400" },
   sent:              { label: "Awaiting Signature",  color: "bg-yellow-100 text-yellow-700" },
   viewed:            { label: "Viewed",              color: "bg-blue-100 text-blue-700" },
   signed:            { label: "✓ Signed (e-sign)",   color: "bg-green-100 text-green-700" },
@@ -330,7 +331,7 @@ function ContractPanel({ booking, onRefresh }) {
   const [markErr,   setMarkErr]   = useState("");
 
   const contractStatus = booking.contractStatus || "not_required";
-  const statusInfo = CONTRACT_STATUS_LABELS[contractStatus] || { label: contractStatus, color: "bg-gray-100 text-gray-500" };
+  const statusInfo = CONTRACT_STATUS_LABELS[contractStatus] || { label: contractStatus, color: "bg-gray-100 text-gray-500 dark:text-gray-400" };
   const isSigned = ["signed", "signed_in_person"].includes(contractStatus);
 
   // Load docs on mount
@@ -410,21 +411,21 @@ function ContractPanel({ booking, onRefresh }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Contract & Documents</h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Contract & Documents</h2>
         <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
           {statusInfo.label}
         </span>
       </div>
 
       {sendResult && (
-        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{sendResult}</div>
+        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{sendResult}</div>
       )}
 
       {/* ── E-Signature section ── */}
       <div className="mb-5">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">E-Signature (SignWell)</p>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 dark:text-gray-500">E-Signature (SignWell)</p>
         <div className="flex flex-wrap gap-2">
           {/* Send / Resend button */}
           {!isSigned && (
@@ -436,7 +437,7 @@ function ContractPanel({ booking, onRefresh }) {
             </button>
           )}
           {contractStatus === "sent" && booking.signwellDocumentId && (
-            <span className="text-xs text-gray-400 self-center">
+            <span className="text-xs text-gray-400 self-center dark:text-gray-500">
               Doc ID: <span className="font-mono">{booking.signwellDocumentId}</span>
             </span>
           )}
@@ -447,7 +448,7 @@ function ContractPanel({ booking, onRefresh }) {
           )}
         </div>
         {contractStatus === "sent" && (
-          <p className="text-xs text-gray-400 mt-1.5">
+          <p className="text-xs text-gray-400 mt-1.5 dark:text-gray-500">
             Awaiting signature from {booking.guestEmail || booking.turoGuestEmail || "guest"}.
             The status will update automatically when they sign.
           </p>
@@ -456,52 +457,52 @@ function ContractPanel({ booking, onRefresh }) {
 
       {/* ── Send Modal ── */}
       {showSendModal && (
-        <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+        <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3 dark:bg-blue-900/20">
           <p className="text-sm font-semibold text-blue-800">Send Rental Agreement via SignWell</p>
           {sendErr && (
-            <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{sendErr}</div>
+            <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{sendErr}</div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Recipient Name</label>
+              <label className="block text-xs text-gray-600 mb-1 dark:text-gray-300">Recipient Name</label>
               <input
                 type="text"
                 value={sendName}
                 onChange={e => setSendName(e.target.value)}
                 placeholder="Full name"
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Recipient Email *</label>
+              <label className="block text-xs text-gray-600 mb-1 dark:text-gray-300">Recipient Email *</label>
               <input
                 type="email"
                 value={sendEmail}
                 onChange={e => setSendEmail(e.target.value)}
                 placeholder="guest@example.com"
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs text-gray-600 mb-1">Custom Message (optional)</label>
+              <label className="block text-xs text-gray-600 mb-1 dark:text-gray-300">Custom Message (optional)</label>
               <textarea
                 value={sendMsg}
                 onChange={e => setSendMsg(e.target.value)}
                 rows={2}
                 placeholder="Hi [name], please sign your rental agreement…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none dark:border-gray-600"
               />
             </div>
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={ccAdmin} onChange={e => setCcAdmin(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 dark:border-gray-600" />
               CC me on this
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={testMode} onChange={e => setTestMode(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-amber-500" />
+                className="h-4 w-4 rounded border-gray-300 text-amber-500 dark:border-gray-600" />
               <span className="text-amber-700">Test mode (no real signature)</span>
             </label>
           </div>
@@ -515,7 +516,7 @@ function ContractPanel({ booking, onRefresh }) {
             </button>
             <button
               onClick={() => { setShowSendModal(false); setSendErr(""); }}
-              className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+              className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
             >
               Cancel
             </button>
@@ -524,20 +525,20 @@ function ContractPanel({ booking, onRefresh }) {
       )}
 
       {/* ── Document Upload section ── */}
-      <div className="border-t border-gray-100 pt-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+      <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 dark:text-gray-500">
           Upload Signed Document
         </p>
-        <p className="text-xs text-gray-400 mb-3">
+        <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
           Upload a photo or scan of a hand-signed contract, receipt, or other document.
           Accepted: JPG, PNG, PDF, HEIC.
         </p>
 
         {uploadMsg && (
-          <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">{uploadMsg}</div>
+          <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700 dark:bg-green-900/20">{uploadMsg}</div>
         )}
         {uploadErr && (
-          <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{uploadErr}</div>
+          <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{uploadErr}</div>
         )}
 
         <div className="flex items-center gap-3">
@@ -558,17 +559,17 @@ function ContractPanel({ booking, onRefresh }) {
 
         {/* Uploaded docs list */}
         {docsLoading ? (
-          <p className="text-xs text-gray-400 mt-3">Loading documents…</p>
+          <p className="text-xs text-gray-400 mt-3 dark:text-gray-500">Loading documents…</p>
         ) : docs.length > 0 ? (
           <div className="mt-3 space-y-1.5">
-            <p className="text-xs text-gray-500 font-medium">Uploaded Documents</p>
+            <p className="text-xs text-gray-500 font-medium dark:text-gray-400">Uploaded Documents</p>
             {docs.map(doc => (
-              <div key={doc.s3_key} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+              <div key={doc.s3_key} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2 dark:bg-gray-900/40">
                 <div>
-                  <span className="font-medium text-gray-700">{doc.filename}</span>
-                  <span className="ml-2 text-gray-400 capitalize">[{doc.type}]</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">{doc.filename}</span>
+                  <span className="ml-2 text-gray-400 capitalize dark:text-gray-500">[{doc.type}]</span>
                   {doc.size > 0 && (
-                    <span className="ml-2 text-gray-400">{(doc.size / 1024).toFixed(0)} KB</span>
+                    <span className="ml-2 text-gray-400 dark:text-gray-500">{(doc.size / 1024).toFixed(0)} KB</span>
                   )}
                 </div>
                 <a
@@ -583,15 +584,15 @@ function ContractPanel({ booking, onRefresh }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-gray-400 mt-3">No documents uploaded yet.</p>
+          <p className="text-xs text-gray-400 mt-3 dark:text-gray-500">No documents uploaded yet.</p>
         )}
       </div>
 
       {/* ── Mark Signed In Person ── */}
       {/* Issue 1: Only enabled after a doc is uploaded OR contract was sent via SignWell */}
       {!isSigned && (
-        <div className="border-t border-gray-100 pt-4 mt-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+        <div className="border-t border-gray-100 pt-4 mt-4 dark:border-gray-700">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 dark:text-gray-500">
             Mark as Signed In Person
           </p>
           {canMarkSigned ? (
@@ -643,21 +644,12 @@ function fromDatetimeLocal(val) {
 }
 
 // ── Guest Key Panel ────────────────────────────────────────────────────────────
-function normalisePortalUrl(raw) {
-  if (!raw) return "";
-  try {
-    const u = new URL(raw);
-    const bookingId = u.pathname.replace(/^\//, "").split("/").pop();
-    if (!bookingId) return raw;
-    return `https://guest.drivedobias.com/${bookingId}`;
-  } catch { return raw; }
-}
-
 function GuestKeyPanel({ booking, onRefresh }) {
   const api = useApi();
   const [loading, setLoading] = useState(false);
   const [msg, setMsg]         = useState("");
   const [err, setErr]         = useState("");
+  const [copied, setCopied]   = useState(false);
 
   const gkStatus          = booking.guestKeyStatus || "";
   const createdAt         = booking.guestKeyCreatedAt || "";
@@ -694,22 +686,36 @@ function GuestKeyPanel({ booking, onRefresh }) {
 
   if (!isTesla) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Tesla Guest Key</h2>
-        <p className="text-sm text-gray-400">Not applicable — this vehicle is not Tesla-enabled.</p>
+      <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Tesla Guest Key</h2>
+        <p className="text-sm text-gray-400 dark:text-gray-500">Not applicable — this vehicle is not Tesla-enabled.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Tesla Guest Key</h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Tesla Guest Key</h2>
         <div className="flex items-center gap-2">
           {gkStatus && (
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${GK_STATUS_COLORS[gkStatus] || "bg-gray-100 text-gray-600"}`}>
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${GK_STATUS_COLORS[gkStatus] || "bg-gray-100 text-gray-600 dark:text-gray-300"}`}>
               {GK_STATUS_LABELS[gkStatus] || gkStatus}
             </span>
+          )}
+          {portalUrl && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(portalUrl).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+              }}
+              title="Copy guest portal link"
+              className="inline-flex items-center gap-1 px-2.5 py-1 border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              {copied ? "✓ Copied!" : "📋 Copy Link"}
+            </button>
           )}
           {portalUrl && (
             <a
@@ -724,51 +730,51 @@ function GuestKeyPanel({ booking, onRefresh }) {
         </div>
       </div>
 
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{err}</div>}
+      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
+      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
 
       {/* E2 — Key lifecycle timeline */}
       {gkStatus && (
         <dl className="grid grid-cols-2 gap-3 text-sm mb-4">
           {createdAt && (
             <div>
-              <dt className="text-gray-400 text-xs">Portal Created</dt>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">Portal Created</dt>
               <dd className="text-xs">{new Date(createdAt).toLocaleString()}</dd>
             </div>
           )}
           {schedActivateAt && (
             <div>
-              <dt className="text-gray-400 text-xs">⏰ Scheduled Activate</dt>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">⏰ Scheduled Activate</dt>
               <dd className="text-xs">{new Date(schedActivateAt).toLocaleString()}</dd>
             </div>
           )}
           {schedRevokeAt && (
             <div>
-              <dt className="text-gray-400 text-xs">⏰ Scheduled Revoke</dt>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">⏰ Scheduled Revoke</dt>
               <dd className="text-xs">{new Date(schedRevokeAt).toLocaleString()}</dd>
             </div>
           )}
           {enabledAt && (
             <div>
-              <dt className="text-gray-400 text-xs">✅ Guest Mode Enabled</dt>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">✅ Guest Mode Enabled</dt>
               <dd className="text-xs font-medium text-green-700">{new Date(enabledAt).toLocaleString()}</dd>
             </div>
           )}
           {disabledAt && (
             <div>
-              <dt className="text-gray-400 text-xs">🔒 Guest Mode Disabled</dt>
-              <dd className="text-xs font-medium text-gray-600">{new Date(disabledAt).toLocaleString()}</dd>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">🔒 Guest Mode Disabled</dt>
+              <dd className="text-xs font-medium text-gray-600 dark:text-gray-300">{new Date(disabledAt).toLocaleString()}</dd>
             </div>
           )}
           {activatedAt && !enabledAt && (
             <div>
-              <dt className="text-gray-400 text-xs">Activated</dt>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">Activated</dt>
               <dd className="text-xs">{new Date(activatedAt).toLocaleString()}</dd>
             </div>
           )}
           {revokedAt && !disabledAt && (
             <div>
-              <dt className="text-gray-400 text-xs">Revoked</dt>
+              <dt className="text-gray-400 text-xs dark:text-gray-500">Revoked</dt>
               <dd className="text-xs">{new Date(revokedAt).toLocaleString()}</dd>
             </div>
           )}
@@ -776,8 +782,8 @@ function GuestKeyPanel({ booking, onRefresh }) {
       )}
 
       {/* ── Guest Mode Controls ── */}
-      <div className="mt-2 pt-2 border-t border-gray-100">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 dark:text-gray-500">
           Guest Mode Controls
         </p>
         <div className="flex flex-wrap gap-2">
@@ -855,7 +861,7 @@ function GuestKeyPanel({ booking, onRefresh }) {
           )}
 
         </div>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-gray-400 mt-2 dark:text-gray-500">
           These controls bypass the automated schedule. Use for manual intervention only.
         </p>
 
@@ -865,12 +871,12 @@ function GuestKeyPanel({ booking, onRefresh }) {
             so showing a stale "failed" label alongside "Guest Mode Active ✓" is
             confusing. We suppress it once the command has clearly succeeded. */}
         {(eraseStatus || (guestModeCmd && guestModeCmd === "failed" && gkStatus !== "guest_mode_active" && gkStatus !== "guest_mode_disabled")) && (
-          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-3 text-xs">
+          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-3 text-xs dark:border-gray-700">
             {eraseStatus && (
               <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
                 eraseStatus === "erased"  ? "bg-green-100 text-green-700" :
                 eraseStatus === "failed"  ? "bg-red-100 text-red-700" :
-                "bg-gray-100 text-gray-600"
+                "bg-gray-100 text-gray-600 dark:text-gray-300"
               }`}>
                 🗑 Erase: {eraseStatus === "erased" ? `✓ Done${eraseAt ? ` (${new Date(eraseAt).toLocaleString()})` : ""}` : eraseStatus}
               </span>
@@ -921,7 +927,7 @@ function ReadinessBanner({ booking }) {
           <span className={isPaid ? "text-green-700" : "text-red-600"}>
             {isPaid ? "✓ Paid" : "✗ Not Paid"}
           </span>
-          <span className={isSigned ? "text-green-700" : contractRequired ? "text-red-600" : "text-gray-500"}>
+          <span className={isSigned ? "text-green-700" : contractRequired ? "text-red-600" : "text-gray-500 dark:text-gray-400"}>
             {isSigned ? "✓ Contract Signed" : contractRequired ? "✗ Contract Not Signed" : "— Not Required"}
           </span>
         </div>
@@ -1030,8 +1036,8 @@ export default function AdminBookingDetail() {
         <div className="flex items-center justify-between">
           <div>
             <Link to="/bookings" className="text-sm text-blue-600 hover:underline">← Back to Bookings</Link>
-            <h1 className="text-2xl font-bold text-gray-900 mt-1">Booking Detail</h1>
-            <p className="text-gray-400 text-xs font-mono">{id}</p>
+            <h1 className="text-2xl font-bold text-gray-900 mt-1 dark:text-gray-100">Booking Detail</h1>
+            <p className="text-gray-400 text-xs font-mono dark:text-gray-500">{id}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Issue 4: Print Contract only for non-Turo bookings */}
@@ -1040,7 +1046,7 @@ export default function AdminBookingDetail() {
                 href={`/admin/bookings/${id}/print-contract`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
                 title="Open printable rental agreement in new tab"
               >
                 🖨 Print Contract
@@ -1056,16 +1062,16 @@ export default function AdminBookingDetail() {
         <ReadinessBanner booking={booking} />
 
         {actionMsg && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">{actionMsg}</div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 dark:bg-green-900/20">{actionMsg}</div>
         )}
         {actionErr && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{actionErr}</div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 dark:bg-red-900/20">{actionErr}</div>
         )}
 
         {/* Booking info — with inline Adjust Times */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Rental Info</h2>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Rental Info</h2>
             {!showAdjust && (
               <button
                 onClick={() => {
@@ -1083,29 +1089,29 @@ export default function AdminBookingDetail() {
 
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <dt className="text-gray-400">Vehicle</dt>
+              <dt className="text-gray-400 dark:text-gray-500">Vehicle</dt>
               <dd className="font-medium">{vehicleMap[booking.vin] || booking.vin || "—"}</dd>
               {booking.vin && vehicleMap[booking.vin] && (
-                <dd className="text-xs text-gray-400 font-mono mt-0.5">{booking.vin}</dd>
+                <dd className="text-xs text-gray-400 font-mono mt-0.5 dark:text-gray-500">{booking.vin}</dd>
               )}
             </div>
             <div>
-              <dt className="text-gray-400">Guest / User</dt>
+              <dt className="text-gray-400 dark:text-gray-500">Guest / User</dt>
               <dd className="font-mono text-xs">
                 {booking.guestName || booking.turoGuestName || booking.userId || "—"}
               </dd>
             </div>
-            <div><dt className="text-gray-400">Start</dt><dd>{new Date(booking.startTime).toLocaleString()}</dd></div>
-            <div><dt className="text-gray-400">End</dt><dd>{new Date(booking.endTime).toLocaleString()}</dd></div>
-            <div><dt className="text-gray-400">Total</dt><dd className="font-medium">{formatCents(booking.totalAmountCents)}</dd></div>
-            <div><dt className="text-gray-400">Deposit</dt><dd>{formatCents(booking.depositAmountCents)}</dd></div>
-            <div><dt className="text-gray-400">Source</dt><dd className="capitalize">{booking.source || "private"}</dd></div>
-            <div><dt className="text-gray-400">Contract</dt><dd className="capitalize">{booking.contractStatus || "—"}</dd></div>
+            <div><dt className="text-gray-400 dark:text-gray-500">Start</dt><dd>{new Date(booking.startTime).toLocaleString()}</dd></div>
+            <div><dt className="text-gray-400 dark:text-gray-500">End</dt><dd>{new Date(booking.endTime).toLocaleString()}</dd></div>
+            <div><dt className="text-gray-400 dark:text-gray-500">Total</dt><dd className="font-medium">{formatCents(booking.totalAmountCents)}</dd></div>
+            <div><dt className="text-gray-400 dark:text-gray-500">Deposit</dt><dd>{formatCents(booking.depositAmountCents)}</dd></div>
+            <div><dt className="text-gray-400 dark:text-gray-500">Source</dt><dd className="capitalize">{booking.source || "private"}</dd></div>
+            <div><dt className="text-gray-400 dark:text-gray-500">Contract</dt><dd className="capitalize">{booking.contractStatus || "—"}</dd></div>
             {booking.source === "turo" && (booking.turoTripId || booking.turoTripUrl) && (
               <div className="col-span-2">
-                <dt className="text-gray-400">Turo Reservation</dt>
+                <dt className="text-gray-400 dark:text-gray-500">Turo Reservation</dt>
                 <dd className="flex items-center gap-2 mt-0.5">
-                  <span className="font-mono text-xs text-gray-700">
+                  <span className="font-mono text-xs text-gray-700 dark:text-gray-300">
                     #{booking.turoTripId || booking.turoTripUrl?.split("/").pop()}
                   </span>
                   <a
@@ -1121,13 +1127,13 @@ export default function AdminBookingDetail() {
             )}
             {(booking.guestEmail || booking.turoGuestEmail) && (
               <div>
-                <dt className="text-gray-400">Guest Email</dt>
+                <dt className="text-gray-400 dark:text-gray-500">Guest Email</dt>
                 <dd className="text-xs">{booking.guestEmail || booking.turoGuestEmail}</dd>
               </div>
             )}
             {(booking.guestPhone || booking.turoGuestPhone) && (
               <div>
-                <dt className="text-gray-400">Guest Phone</dt>
+                <dt className="text-gray-400 dark:text-gray-500">Guest Phone</dt>
                 <dd className="text-xs font-mono">
                   <a
                     href={`tel:${booking.guestPhone || booking.turoGuestPhone}`}
@@ -1140,7 +1146,7 @@ export default function AdminBookingDetail() {
             )}
             {!(booking.guestPhone || booking.turoGuestPhone) && (
               <div>
-                <dt className="text-gray-400">Guest Phone</dt>
+                <dt className="text-gray-400 dark:text-gray-500">Guest Phone</dt>
                 <dd className="text-xs text-amber-600 italic">⚠ No phone number on file — SMS will fail</dd>
               </div>
             )}
@@ -1148,26 +1154,26 @@ export default function AdminBookingDetail() {
 
           {/* Inline adjust-times form */}
           {showAdjust && (
-            <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-              {adjMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">{adjMsg}</div>}
-              {adjErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{adjErr}</div>}
+            <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 dark:border-gray-700">
+              {adjMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700 dark:bg-green-900/20">{adjMsg}</div>}
+              {adjErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{adjErr}</div>}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">New Start Time</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">New Start Time</label>
                   <input
                     type="datetime-local"
                     value={adjStart}
                     onChange={e => setAdjStart(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:border-gray-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">New End Time</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">New End Time</label>
                   <input
                     type="datetime-local"
                     value={adjEnd}
                     onChange={e => setAdjEnd(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:border-gray-600"
                   />
                 </div>
               </div>
@@ -1197,7 +1203,7 @@ export default function AdminBookingDetail() {
                 </button>
                 <button
                   onClick={() => { setShowAdjust(false); setAdjErr(""); }}
-                  className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+                  className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
                 >
                   Cancel
                 </button>
@@ -1207,9 +1213,9 @@ export default function AdminBookingDetail() {
         </div>
 
         {/* E1/E3: Edit Booking Panel */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Edit Booking</h2>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Edit Booking</h2>
             {!showEdit && (
               <button
                 onClick={() => {
@@ -1230,47 +1236,47 @@ export default function AdminBookingDetail() {
           </div>
 
           {!showEdit ? (
-            <dl className="grid grid-cols-2 gap-3 text-sm text-gray-600">
-              <div><dt className="text-gray-400">Guest Name</dt><dd>{booking.guestName || booking.turoGuestName || <span className="italic text-gray-300">—</span>}</dd></div>
-              <div><dt className="text-gray-400">Guest Phone</dt><dd>{booking.guestPhone || booking.turoGuestPhone || <span className="italic text-amber-500 text-xs">⚠ missing</span>}</dd></div>
-              <div><dt className="text-gray-400">Guest Email</dt><dd className="text-xs">{booking.guestEmail || booking.turoGuestEmail || <span className="italic text-gray-300">—</span>}</dd></div>
-              <div><dt className="text-gray-400">Total</dt><dd className="font-medium">{formatCents(booking.totalAmountCents)}</dd></div>
-              <div><dt className="text-gray-400">Payment Method</dt><dd className="capitalize">{(booking.paymentMethod || "—").replace(/_/g, " ")}</dd></div>
-              <div className="col-span-2"><dt className="text-gray-400">Notes</dt><dd className="text-xs">{booking.notes || <span className="italic text-gray-300">—</span>}</dd></div>
+            <dl className="grid grid-cols-2 gap-3 text-sm text-gray-600 dark:text-gray-300">
+              <div><dt className="text-gray-400 dark:text-gray-500">Guest Name</dt><dd>{booking.guestName || booking.turoGuestName || <span className="italic text-gray-300">—</span>}</dd></div>
+              <div><dt className="text-gray-400 dark:text-gray-500">Guest Phone</dt><dd>{booking.guestPhone || booking.turoGuestPhone || <span className="italic text-amber-500 text-xs">⚠ missing</span>}</dd></div>
+              <div><dt className="text-gray-400 dark:text-gray-500">Guest Email</dt><dd className="text-xs">{booking.guestEmail || booking.turoGuestEmail || <span className="italic text-gray-300">—</span>}</dd></div>
+              <div><dt className="text-gray-400 dark:text-gray-500">Total</dt><dd className="font-medium">{formatCents(booking.totalAmountCents)}</dd></div>
+              <div><dt className="text-gray-400 dark:text-gray-500">Payment Method</dt><dd className="capitalize">{(booking.paymentMethod || "—").replace(/_/g, " ")}</dd></div>
+              <div className="col-span-2"><dt className="text-gray-400 dark:text-gray-500">Notes</dt><dd className="text-xs">{booking.notes || <span className="italic text-gray-300">—</span>}</dd></div>
             </dl>
           ) : (
             <div className="space-y-3">
-              {editMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">{editMsg}</div>}
-              {editErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{editErr}</div>}
+              {editMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700 dark:bg-green-900/20">{editMsg}</div>}
+              {editErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{editErr}</div>}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Guest Name</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Guest Name</label>
                   <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
                     placeholder="Full name"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Guest Phone</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Guest Phone</label>
                   <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)}
                     placeholder="+1 (555) 000-0000"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Guest Email</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Guest Email</label>
                   <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
                     placeholder="guest@example.com"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Total Amount ($)</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Total Amount ($)</label>
                   <input type="number" min="0" step="0.01" value={editTotal} onChange={e => setEditTotal(e.target.value)}
                     placeholder="e.g. 350.00"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Payment Method</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Payment Method</label>
                   <select value={editPayMethod} onChange={e => setEditPayMethod(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600">
                     <option value="">— unchanged —</option>
                     <option value="bank_transfer">Bank Transfer</option>
                     <option value="zelle">Zelle</option>
@@ -1283,10 +1289,10 @@ export default function AdminBookingDetail() {
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Notes</label>
                   <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
                     rows={2} placeholder="Internal notes about this booking…"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none dark:border-gray-600" />
                 </div>
               </div>
               <div className="flex gap-2">
@@ -1323,7 +1329,7 @@ export default function AdminBookingDetail() {
                 </button>
                 <button
                   onClick={() => { setShowEdit(false); setEditErr(""); setEditMsg(""); }}
-                  className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+                  className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
                 >
                   Cancel
                 </button>
@@ -1335,8 +1341,8 @@ export default function AdminBookingDetail() {
         {/* Admin actions */}
         {/* Issue 5: Check-in / deposit actions hidden for Turo bookings */}
         {!isTuro && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Actions</h2>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Actions</h2>
             <div className="flex flex-wrap gap-3">
               {!preTrip && booking.status === "confirmed" && (
                 <Link to={`/bookings/${id}/check-in`}
@@ -1360,7 +1366,7 @@ export default function AdminBookingDetail() {
               {["confirmed", "active"].includes(booking.status) && (
                 <button
                   onClick={() => doAction(`/admin/bookings/${id}/release-deposit`, "Release deposit")}
-                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
                   Release Deposit
                 </button>
               )}
@@ -1386,22 +1392,22 @@ export default function AdminBookingDetail() {
 
         {/* Inspections */}
         {(preTrip || postTrip) && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Inspections</h2>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Inspections</h2>
             <div className="space-y-4">
               {[preTrip, postTrip].filter(Boolean).map(insp => (
-                <div key={insp.type} className="border border-gray-100 rounded-lg p-4">
-                  <h3 className="font-medium text-gray-800 mb-3">
+                <div key={insp.type} className="border border-gray-100 rounded-lg p-4 dark:border-gray-700">
+                  <h3 className="font-medium text-gray-800 mb-3 dark:text-gray-100">
                     {insp.type === "pre_trip" ? "🔍 Pre-Trip" : "✅ Post-Trip"} — {new Date(insp.completedAt).toLocaleString()}
                   </h3>
                   <dl className="grid grid-cols-3 gap-2 text-sm">
-                    <div><dt className="text-gray-400">Mileage</dt><dd>{insp.mileage?.toLocaleString()} mi</dd></div>
-                    <div><dt className="text-gray-400">Battery/Fuel</dt><dd>{insp.fuelOrBatteryPct}%</dd></div>
-                    <div><dt className="text-gray-400">Exterior</dt><dd className="capitalize">{insp.exteriorCondition?.replace("_", " ")}</dd></div>
-                    <div><dt className="text-gray-400">Interior</dt><dd className="capitalize">{insp.interiorCondition?.replace("_", " ")}</dd></div>
+                    <div><dt className="text-gray-400 dark:text-gray-500">Mileage</dt><dd>{insp.mileage?.toLocaleString()} mi</dd></div>
+                    <div><dt className="text-gray-400 dark:text-gray-500">Battery/Fuel</dt><dd>{insp.fuelOrBatteryPct}%</dd></div>
+                    <div><dt className="text-gray-400 dark:text-gray-500">Exterior</dt><dd className="capitalize">{insp.exteriorCondition?.replace("_", " ")}</dd></div>
+                    <div><dt className="text-gray-400 dark:text-gray-500">Interior</dt><dd className="capitalize">{insp.interiorCondition?.replace("_", " ")}</dd></div>
                     {insp.tirePressures && (
                       <div className="col-span-2">
-                        <dt className="text-gray-400">Tire PSI</dt>
+                        <dt className="text-gray-400 dark:text-gray-500">Tire PSI</dt>
                         <dd>FL:{insp.tirePressures.fl} FR:{insp.tirePressures.fr} RL:{insp.tirePressures.rl} RR:{insp.tirePressures.rr}</dd>
                       </div>
                     )}

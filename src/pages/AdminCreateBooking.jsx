@@ -275,7 +275,7 @@ export default function AdminCreateBooking() {
   };
 
   // ── Input class helper ─────────────────────────────────────────────────────
-  const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+  const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600";
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -285,8 +285,8 @@ export default function AdminCreateBooking() {
         {/* Header */}
         <div className="mb-6">
           <Link to="/bookings" className="text-sm text-blue-600 hover:underline">← Back to Bookings</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">New Admin Booking</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-gray-900 mt-1 dark:text-gray-100">New Admin Booking</h1>
+          <p className="text-sm text-gray-500 mt-0.5 dark:text-gray-400">
             Creates a confirmed booking directly — no Stripe charge, no e-signature required at creation.
             Print and sign the contract from the booking detail page after confirming.
           </p>
@@ -299,20 +299,20 @@ export default function AdminCreateBooking() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{error}</div>
         )}
 
         {/* ── Step 1: Form ── */}
         {step === 1 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 dark:bg-gray-800 dark:border-gray-700">
 
             {/* Vehicle */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Vehicle</label>
               {vehiclesLoading ? (
-                <div className="text-sm text-gray-400">Loading vehicles…</div>
+                <div className="text-sm text-gray-400 dark:text-gray-500">Loading vehicles…</div>
               ) : (
-                <select value={vin} onChange={e => setVin(e.target.value)} className={inp + " bg-white"}>
+                <select value={vin} onChange={e => setVin(e.target.value)} className={inp + " bg-white dark:bg-gray-800"}>
                   {vehicles.map(v => (
                     <option key={v.vin} value={v.vin}>
                       {v.year} {v.make} {v.model}
@@ -326,11 +326,11 @@ export default function AdminCreateBooking() {
             {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Start Date & Time</label>
                 <input type="datetime-local" value={startDate} onChange={e => setStart(e.target.value)} className={inp} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">End Date & Time</label>
                 <input type="datetime-local" value={endDate} onChange={e => setEnd(e.target.value)} className={inp} />
               </div>
             </div>
@@ -340,54 +340,54 @@ export default function AdminCreateBooking() {
 
             {/* Availability indicator */}
             {availChecking && (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />
                 Checking availability…
               </div>
             )}
             {!availChecking && availConflict === false && vin && startDate && endDate && startDate < endDate && (
-              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 dark:bg-green-900/20">
                 <span>✓</span> Vehicle is available for these dates.
               </div>
             )}
             {!availChecking && availConflict && (
-              <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 dark:bg-red-900/20">
                 <span>⚠</span> <span><strong>Booking conflict:</strong> {availConflict}</span>
               </div>
             )}
 
             {/* Primary Renter */}
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 dark:text-gray-500">
                 Primary Renter
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Full Name</label>
                   <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Full name" className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Phone</label>
                   <input type="tel" value={guestPhone} onChange={e => setGuestPhone(e.target.value)} placeholder="(555) 555-5555" className={inp} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Email</label>
                   <input type="email" value={guestEmail} onChange={e => setGuestEmail(e.target.value)} placeholder="renter@example.com" className={inp} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Home Address</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Home Address</label>
                   <input type="text" value={guestAddress} onChange={e => setGuestAddress(e.target.value)} placeholder="123 Main St" className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City / State / ZIP</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">City / State / ZIP</label>
                   <input type="text" value={guestCity} onChange={e => setGuestCity(e.target.value)} placeholder="Milwaukee, WI 53201" className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Date of Birth</label>
                   <input type="date" value={guestDOB} onChange={e => setGuestDOB(e.target.value)} className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Driver's License #</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Driver's License #</label>
                   <input type="text" value={guestDLNum} onChange={e => setGuestDLNum(e.target.value)} placeholder="D123-4567-8901" className={inp} />
                 </div>
                 <div>
@@ -424,37 +424,37 @@ export default function AdminCreateBooking() {
                   <input type="text" value={addlDLNum} onChange={e => setAddlDLNum(e.target.value)} placeholder="D123-4567-8901" className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">License State</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">License State</label>
                   <input type="text" value={addlDLState} onChange={e => setAddlDLState(e.target.value)} placeholder="WI" maxLength={2} className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">License Expiration</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">License Expiration</label>
                   <input type="date" value={addlDLExp} onChange={e => setAddlDLExp(e.target.value)} className={inp} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Date of Birth</label>
                   <input type="date" value={addlDOB} onChange={e => setAddlDOB(e.target.value)} className={inp} />
                 </div>
               </div>
             </div>
 
             {/* Payment */}
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Payment Method</p>
-              <select value={paymentMethod} onChange={e => setPayment(e.target.value)} className={inp + " bg-white"}>
+            <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 dark:text-gray-500">Payment Method</p>
+              <select value={paymentMethod} onChange={e => setPayment(e.target.value)} className={inp + " bg-white dark:bg-gray-800"}>
                 {PAYMENT_OPTIONS.map(o => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-400 mt-1.5">{getNoticeText(paymentMethod)}</p>
+              <p className="text-xs text-gray-400 mt-1.5 dark:text-gray-500">{getNoticeText(paymentMethod)}</p>
             </div>
 
             {/* Trip purpose & notes */}
-            <div className="border-t border-gray-100 pt-4 space-y-3">
+            <div className="border-t border-gray-100 pt-4 space-y-3 dark:border-gray-700">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">
                   Trip Purpose
-                  <span className="ml-1 text-xs text-gray-400 font-normal">(shown on booking record & contract)</span>
+                  <span className="ml-1 text-xs text-gray-400 font-normal dark:text-gray-500">(shown on booking record & contract)</span>
                 </label>
                 <input
                   type="text"
@@ -465,11 +465,11 @@ export default function AdminCreateBooking() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pickup / Return Location</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Pickup / Return Location</label>
                 <input type="text" value={pickupLocation} onChange={e => setPickup(e.target.value)} placeholder="e.g. Muskego, WI" className={inp} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Internal Notes</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Internal Notes</label>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any additional notes…" className={inp + " resize-none"} />
               </div>
             </div>
@@ -479,7 +479,7 @@ export default function AdminCreateBooking() {
               <button
                 onClick={() => openPrintPreview(true)}
                 disabled={!canReview}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
                 title="Preview a draft of the rental agreement in a new tab"
               >
                 🖨 Preview Draft Contract
@@ -498,51 +498,51 @@ export default function AdminCreateBooking() {
         {/* ── Step 2: Review ── */}
         {step === 2 && selectedVehicle && (
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Booking Summary</h2>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Booking Summary</h2>
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <dt className="text-gray-400">Vehicle</dt>
+                  <dt className="text-gray-400 dark:text-gray-500">Vehicle</dt>
                   <dd className="font-medium">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}</dd>
-                  <dd className="text-xs text-gray-400 font-mono">{vin}</dd>
+                  <dd className="text-xs text-gray-400 font-mono dark:text-gray-500">{vin}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400">Duration</dt>
+                  <dt className="text-gray-400 dark:text-gray-500">Duration</dt>
                   <dd className="font-medium">{numDays} day{numDays !== 1 ? "s" : ""}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400">Start</dt>
+                  <dt className="text-gray-400 dark:text-gray-500">Start</dt>
                   <dd>{new Date(startDate).toLocaleString()}</dd>
                 </div>
                 <div>
-                  <dt className="text-gray-400">End</dt>
+                  <dt className="text-gray-400 dark:text-gray-500">End</dt>
                   <dd>{new Date(endDate).toLocaleString()}</dd>
                 </div>
                 {guestName && (
                   <div>
-                    <dt className="text-gray-400">Renter</dt>
+                    <dt className="text-gray-400 dark:text-gray-500">Renter</dt>
                     <dd>{guestName}</dd>
                   </div>
                 )}
                 {guestEmail && (
                   <div>
-                    <dt className="text-gray-400">Email</dt>
+                    <dt className="text-gray-400 dark:text-gray-500">Email</dt>
                     <dd className="text-xs">{guestEmail}</dd>
                   </div>
                 )}
                 {addlName && (
                   <div className="col-span-2">
-                    <dt className="text-gray-400">Additional Driver</dt>
+                    <dt className="text-gray-400 dark:text-gray-500">Additional Driver</dt>
                     <dd>{addlName}</dd>
                   </div>
                 )}
                 <div>
-                  <dt className="text-gray-400">Payment</dt>
+                  <dt className="text-gray-400 dark:text-gray-500">Payment</dt>
                   <dd>{PAYMENT_OPTIONS.find(o => o.value === paymentMethod)?.label}</dd>
                 </div>
                 {purpose && (
                   <div className="col-span-2">
-                    <dt className="text-gray-400">Trip Purpose</dt>
+                    <dt className="text-gray-400 dark:text-gray-500">Trip Purpose</dt>
                     <dd>{purpose}</dd>
                   </div>
                 )}
@@ -550,18 +550,18 @@ export default function AdminCreateBooking() {
             </div>
 
             {/* Pricing */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Pricing (record only — no Stripe charge)</h2>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-gray-400">Pricing (record only — no Stripe charge)</h2>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{formatCents(dailyRate)} × {numDays} day{numDays !== 1 ? "s" : ""}</span>
+                  <span className="text-gray-500 dark:text-gray-400">{formatCents(dailyRate)} × {numDays} day{numDays !== 1 ? "s" : ""}</span>
                   <span>{formatCents(totalCents)}</span>
                 </div>
-                <div className="flex justify-between font-semibold border-t border-gray-100 pt-1.5 mt-1.5">
+                <div className="flex justify-between font-semibold border-t border-gray-100 pt-1.5 mt-1.5 dark:border-gray-700">
                   <span>Total Due</span>
                   <span>{formatCents(totalCents)}</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 mt-1 dark:text-gray-500">
                   Collect via {PAYMENT_OPTIONS.find(o => o.value === paymentMethod)?.label?.toLowerCase()}.
                   Print the contract from the booking detail page after confirming.
                 </p>
@@ -572,13 +572,13 @@ export default function AdminCreateBooking() {
             <div className="flex gap-3">
               <button
                 onClick={() => setStep(1)}
-                className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+                className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
               >
                 ← Edit
               </button>
               <button
                 onClick={() => openPrintPreview(true)}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
                 title="Preview draft contract"
               >
                 🖨 Preview Draft

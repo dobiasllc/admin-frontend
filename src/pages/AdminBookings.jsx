@@ -8,39 +8,46 @@
  *  - Compact select-based filter bar (replaces scattered pill buttons)
  *  - Horizontal scroll wrapper for mobile responsiveness
  *  - Safe bookingId display with fallback
- *  - Future/past visual separator with same-day trips treated as upcoming
+ *  - 3-way Current / Upcoming / Past bucketing (date-based, not full
+ *    timestamp) so a trip starting today never drops out of "Current"
+ *    just because the clock has passed its start time-of-day.
+ *  - "All | Current | Upcoming | Past" tab control for focused viewing.
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
+import { normalisePortalUrl } from '../utils/guestPortal';
 
 const STATUS_COLORS = {
   pending:   'bg-yellow-100 text-yellow-700',
   confirmed: 'bg-blue-100 text-blue-700',
   active:    'bg-green-100 text-green-700',
-  completed: 'bg-gray-100 text-gray-600',
+  completed: 'bg-gray-100 text-gray-600 dark:text-gray-300',
   canceled:  'bg-red-100 text-red-700',
   disputed:  'bg-purple-100 text-purple-700',
 };
 
 /**
- * Returns true if a booking should be treated as "upcoming" (future).
- * A booking is upcoming if its startTime is today or in the future.
- * It only moves to "past" the day AFTER its scheduled start date.
+ * Buckets a booking into 'current' | 'upcoming' | 'past' using DATE-only
+ * comparisons (not full timestamps). A booking is 'current' any time today
+ * falls within [startDate, endDate] — so a trip that started this morning
+ * stays in "Current" all day long instead of sliding into "Past" as soon
+ * as the clock passes its start time-of-day.
  */
-function isUpcoming(booking) {
-  const startTime = booking.startTime;
-  if (!startTime) return false;
-  // Get today's date at midnight local time
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  // Parse the booking start (may be naive ISO like "2026-07-10T06:30:00")
-  const start = new Date(startTime);
-  start.setHours(0, 0, 0, 0);
-  // Upcoming = starts today or later
-  return start >= today;
+function getBookingBucket(booking) {
+  const { startTime, endTime } = booking;
+  if (!startTime) return 'past';
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const startStr = startTime.slice(0, 10);
+  const endStr   = (endTime || startTime).slice(0, 10);
+
+  if (startStr <= todayStr && todayStr <= endStr) return 'current';
+  if (startStr > todayStr) return 'upcoming';
+  return 'past';
 }
+
 
 export default function AdminBookings() {
   const api      = useApi();
@@ -49,6 +56,7 @@ export default function AdminBookings() {
   const [bookings, setBookings]   = useState([]);
   const [vehicleMap, setVehicleMap] = useState({}); // vin → "Year Make Model"
   const [loading, setLoading]     = useState(true);
+  const [copiedId, setCopiedId]   = useState('');
 
   const status = params.get('status') || '';
   const source = params.get('source') || '';
@@ -91,20 +99,42 @@ export default function AdminBookings() {
     return id.length > 10 ? `${id.slice(0, 10)}…` : id;
   };
 
-  // Split bookings into upcoming and past sections.
-  // The backend already sorts them correctly (upcoming first, then past).
-  // We just need to find the split point.
-  const { upcoming, past } = useMemo(() => {
-    const upcoming = bookings.filter(isUpcoming);
-    const past     = bookings.filter(b => !isUpcoming(b));
-    return { upcoming, past };
-  }, [bookings]);
+  // Split bookings into current / upcoming / past sections.
+  // The backend already sorts within each bucket (current & upcoming: soonest
+  // first; past: most recent first) — we just need to bucket them here too.
+  // Canceled bookings are excluded from these grouped views by default (they
+  // aren't actually "in progress"/"upcoming"/relevant to daily ops) — unless
+  // the admin has explicitly selected the "Canceled" status filter, in which
+  // case we show them so the filter still works as expected.
+  const { current, upcoming, past } = useMemo(() => {
+    const groupable = status === 'canceled'
+      ? bookings
+      : bookings.filter(b => b.status !== 'canceled');
+    const current  = groupable.filter(b => getBookingBucket(b) === 'current');
+    const upcoming = groupable.filter(b => getBookingBucket(b) === 'upcoming');
+    const past     = groupable.filter(b => getBookingBucket(b) === 'past');
+    return { current, upcoming, past };
+  }, [bookings, status]);
+
+
+  const view = params.get('view') || 'all'; // all | current | upcoming | past
+  const setView = (v) => {
+    const next = new URLSearchParams(params);
+    if (v && v !== 'all') next.set('view', v); else next.delete('view');
+    setParams(next);
+  };
+
+  const showCurrent  = view === 'all' || view === 'current';
+  const showUpcoming = view === 'all' || view === 'upcoming';
+  const showPast     = view === 'all' || view === 'past';
+
 
   const renderRow = (b) => {
     const gkStatus = b.guestKeyStatus || '';
     const guestModeActive   = gkStatus === 'guest_mode_active';
     const guestModeDisabled = gkStatus === 'guest_mode_disabled';
     const guestModePending  = ['pending', 'pending_creation', 'created'].includes(gkStatus);
+    const portalUrl = normalisePortalUrl(b.guestAccessUrl || b.guestKeyLink);
 
     return (
       <tr
@@ -144,19 +174,36 @@ export default function AdminBookings() {
 
         {/* Guest Mode badge — only shown for Tesla bookings that have a guestKeyStatus */}
         <td className="px-4 py-3">
-          {guestModeActive ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Guest Mode
-            </span>
-          ) : guestModeDisabled ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" /> Disabled
-            </span>
-          ) : guestModePending && b.status !== 'canceled' ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-50 text-yellow-600 rounded-full text-xs font-medium whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" /> Key Pending
-            </span>
-          ) : null}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {guestModeActive ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Guest Mode
+              </span>
+            ) : guestModeDisabled ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" /> Disabled
+              </span>
+            ) : guestModePending && b.status !== 'canceled' ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-50 text-yellow-600 rounded-full text-xs font-medium whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" /> Key Pending
+              </span>
+            ) : null}
+            {portalUrl && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(portalUrl).then(() => {
+                    setCopiedId(b.bookingId);
+                    setTimeout(() => setCopiedId(''), 2000);
+                  });
+                }}
+                title="Copy guest portal link"
+                className="inline-flex items-center gap-1 px-2 py-0.5 border border-gray-300 text-gray-600 text-xs font-medium rounded-full hover:bg-gray-50 transition-colors whitespace-nowrap dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                {copiedId === b.bookingId ? '✓ Copied!' : '📋 Copy Link'}
+              </button>
+            )}
+          </div>
         </td>
       </tr>
     );
@@ -258,6 +305,32 @@ export default function AdminBookings() {
             </div>
           </div>
 
+          {/* ── View tabs: All | Current | Upcoming | Past ── */}
+          <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-2 py-2 w-fit">
+            {[
+              { key: 'all',      label: 'All',      count: bookings.length },
+              { key: 'current',  label: 'Current',  count: current.length },
+              { key: 'upcoming', label: 'Upcoming', count: upcoming.length },
+              { key: 'past',     label: 'Past',     count: past.length },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setView(tab.key)}
+                className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
+                  view === tab.key
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {tab.label}
+                <span className={`ml-1.5 text-xs ${view === tab.key ? 'text-blue-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+
           {/* ── Table ── */}
           {loading ? (
             <div className="flex justify-center py-12">
@@ -265,11 +338,42 @@ export default function AdminBookings() {
             </div>
           ) : bookings.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-500 text-sm text-center py-12">No bookings found.</p>
+          ) : (view === 'current' && current.length === 0) ||
+             (view === 'upcoming' && upcoming.length === 0) ||
+             (view === 'past' && past.length === 0) ? (
+            <p className="text-gray-400 dark:text-gray-500 text-sm text-center py-12">
+              No {view} bookings found.
+            </p>
           ) : (
+
             <div className="space-y-4">
 
+              {/* ── Current / In Progress section ── */}
+              {showCurrent && current.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-green-300 dark:border-green-700/60 overflow-hidden shadow-sm">
+                  <div className="bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800/40 px-4 py-2 flex items-center gap-2">
+                    <span className="text-green-600 dark:text-green-400 text-sm">🚗</span>
+                    <span className="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wide">
+                      Current / In Progress
+                    </span>
+                    <span className="ml-auto text-xs text-green-600 dark:text-green-400 font-medium">
+                      {current.length} booking{current.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[640px]">
+                      {tableHeader}
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                        {current.map(renderRow)}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* ── Upcoming / Today section ── */}
-              {upcoming.length > 0 && (
+              {showUpcoming && upcoming.length > 0 && (
+
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-blue-200 dark:border-blue-800/50 overflow-hidden shadow-sm">
                   <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800/40 px-4 py-2 flex items-center gap-2">
                     <span className="text-blue-600 dark:text-blue-400 text-sm">📅</span>
@@ -292,7 +396,8 @@ export default function AdminBookings() {
               )}
 
               {/* ── Past section ── */}
-              {past.length > 0 && (
+              {showPast && past.length > 0 && (
+
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden opacity-90">
                   <div className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2">
                     <span className="text-gray-400 text-sm">🕐</span>

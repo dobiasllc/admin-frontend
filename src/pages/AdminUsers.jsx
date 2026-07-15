@@ -9,12 +9,12 @@ import AdminLayout from '../components/AdminNav';
 
 const TIER_COLORS = {
   bronze:   'bg-orange-100 text-orange-700',
-  silver:   'bg-gray-100 text-gray-600',
+  silver:   'bg-gray-100 text-gray-600 dark:text-gray-300',
   gold:     'bg-yellow-100 text-yellow-700',
   platinum: 'bg-blue-100 text-blue-700',
 };
 const VERIFY_COLORS = {
-  unverified:     'bg-gray-100 text-gray-500',
+  unverified:     'bg-gray-100 text-gray-500 dark:text-gray-400',
   pending_upload: 'bg-yellow-100 text-yellow-700',
   pending_admin:  'bg-blue-100 text-blue-700',
   verified:       'bg-green-100 text-green-700',
@@ -63,14 +63,14 @@ export default function AdminUsers() {
   return (
     <AdminLayout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">Users</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Users</h1>
 
         {loadErr && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono">{loadErr}</div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono dark:bg-red-900/20">{loadErr}</div>
         )}
 
         {actionMsg && (
-          <div className={`rounded-lg p-3 text-sm ${actionMsg.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+          <div className={`rounded-lg p-3 text-sm ${actionMsg.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20' : 'bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20'}`}>
             {actionMsg}
           </div>
         )}
@@ -80,7 +80,7 @@ export default function AdminUsers() {
           {['', 'bronze', 'silver', 'gold', 'platinum'].map(t => (
             <button key={t} onClick={() => setFilter(t)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium border transition capitalize
-                ${tier === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}>
+                ${tier === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600'}`}>
               {t || 'All Tiers'}
             </button>
           ))}
@@ -89,33 +89,33 @@ export default function AdminUsers() {
         {loading ? (
           <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
         ) : users.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-12">No users found.</p>
+          <p className="text-gray-400 text-sm text-center py-12 dark:text-gray-500">No users found.</p>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-50 border-b border-gray-200 dark:bg-gray-900/40 dark:border-gray-700">
                 <tr>
                   {['Name / Email', 'Tier', 'Points', 'Rentals', 'Verification', 'Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {users.map(u => (
-                  <tr key={u.userId || u.sub} className="hover:bg-gray-50">
+                  <tr key={u.userId || u.sub} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800">{u.fullName || '—'}</p>
-                      <p className="text-xs text-gray-400">{u.email}</p>
+                      <p className="font-medium text-gray-800 dark:text-gray-100">{u.fullName || '—'}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">{u.email}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${TIER_COLORS[u.tier] || 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${TIER_COLORS[u.tier] || 'bg-gray-100 text-gray-500 dark:text-gray-400'}`}>
                         {u.tier || 'bronze'}
                       </span>
                     </td>
                     <td className="px-4 py-3">{u.points || 0}</td>
                     <td className="px-4 py-3">{u.totalRentals || 0}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${VERIFY_COLORS[u.verificationStatus] || 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${VERIFY_COLORS[u.verificationStatus] || 'bg-gray-100 text-gray-500 dark:text-gray-400'}`}>
                         {u.verificationStatus || 'unverified'}
                       </span>
                     </td>

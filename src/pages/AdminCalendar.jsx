@@ -114,7 +114,7 @@ function BookingTooltip({ booking, vehicleName }) {
     <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl pointer-events-none">
       <p className="font-semibold text-sm mb-1">{vehicleName}</p>
       <p className="text-gray-300 mb-1">{guest}</p>
-      {phone && <p className="text-gray-400 mb-0.5">📞 {phone}</p>}
+      {phone && <p className="text-gray-400 mb-0.5 dark:text-gray-500">📞 {phone}</p>}
       <p className="mb-1">{start} → {end}</p>
       {location && (
         <p className="text-gray-300 mb-0.5 flex items-start gap-1">
@@ -126,7 +126,7 @@ function BookingTooltip({ booking, vehicleName }) {
         <p className="text-blue-400 mt-1 truncate">🔗 {tripUrl}</p>
       )}
       <div className="flex items-center justify-between mt-1.5">
-        <span className="capitalize text-gray-400">{booking.status}</span>
+        <span className="capitalize text-gray-400 dark:text-gray-500">{booking.status}</span>
         {booking.source === 'turo' && (
           <span className="bg-orange-500 text-white px-1.5 py-0.5 rounded text-xs">Turo</span>
         )}
@@ -179,8 +179,8 @@ function BookingBar({ booking, bar, vehicleName, navigate }) {
           <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-44 bg-gray-900 text-white text-xs rounded-lg p-2.5 shadow-xl pointer-events-none">
             <p className="font-semibold mb-1">🔒 Unavailable</p>
             <p className="text-gray-300">{booking.reason || 'Manual block'}</p>
-            <p className="text-gray-400 mt-1">{new Date(booking.startTime).toLocaleDateString()} → {new Date(booking.endTime).toLocaleDateString()}</p>
-            <p className="text-gray-500 mt-1 text-xs">Click to remove</p>
+            <p className="text-gray-400 mt-1 dark:text-gray-500">{new Date(booking.startTime).toLocaleDateString()} → {new Date(booking.endTime).toLocaleDateString()}</p>
+            <p className="text-gray-500 mt-1 text-xs dark:text-gray-400">Click to remove</p>
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
           </div>
         )}
@@ -210,26 +210,26 @@ function BlockModal({ vin, vehicleName, defaultStart, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">Block Dates</h3>
-        <p className="text-sm text-gray-500 mb-4">{vehicleName}</p>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 dark:bg-gray-800">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1 dark:text-gray-100">Block Dates</h3>
+        <p className="text-sm text-gray-500 mb-4 dark:text-gray-400">{vehicleName}</p>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Start Date</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">End Date</label>
             <input type="date" value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Reason</label>
             <input type="text" value={reason} onChange={e => setReason(e.target.value)}
               placeholder="e.g. Maintenance, Personal use"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
           </div>
         </div>
 
@@ -239,7 +239,7 @@ function BlockModal({ vin, vehicleName, defaultStart, onSave, onClose }) {
             {saving ? 'Saving…' : '🔒 Block Dates'}
           </button>
           <button onClick={onClose}
-            className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+            className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
             Cancel
           </button>
         </div>
@@ -254,11 +254,11 @@ function RemoveBlockModal({ block, vehicleName, onConfirm, onClose }) {
   const [removing, setRemoving] = useState(false);
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">Remove Block?</h3>
-        <p className="text-sm text-gray-500 mb-3">{vehicleName}</p>
-        <p className="text-sm text-gray-700 mb-1"><span className="font-medium">Reason:</span> {block.reason}</p>
-        <p className="text-sm text-gray-700 mb-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 dark:bg-gray-800">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1 dark:text-gray-100">Remove Block?</h3>
+        <p className="text-sm text-gray-500 mb-3 dark:text-gray-400">{vehicleName}</p>
+        <p className="text-sm text-gray-700 mb-1 dark:text-gray-300"><span className="font-medium">Reason:</span> {block.reason}</p>
+        <p className="text-sm text-gray-700 mb-4 dark:text-gray-300">
           {new Date(block.startTime).toLocaleDateString()} → {new Date(block.endTime).toLocaleDateString()}
         </p>
         <div className="flex gap-3">
@@ -268,7 +268,7 @@ function RemoveBlockModal({ block, vehicleName, onConfirm, onClose }) {
             {removing ? 'Removing…' : 'Remove Block'}
           </button>
           <button onClick={onClose}
-            className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+            className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
             Cancel
           </button>
         </div>
@@ -301,40 +301,40 @@ function ICalModal({ apiBase, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 dark:bg-gray-800">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">📅 Google Calendar Sync</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">📅 Google Calendar Sync</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none dark:hover:text-gray-300 dark:text-gray-300 dark:text-gray-500">×</button>
         </div>
 
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 mb-4 dark:text-gray-300">
           Subscribe to your fleet calendar in Google Calendar, Apple Calendar, or any app that supports iCal feeds.
         </p>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-800">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-800 dark:bg-blue-900/20">
           <strong>Setup:</strong> Store a secret token in AWS SSM at <code className="bg-blue-100 px-1 rounded">/fleet/ical/token</code> using the AWS console or CLI, then enter it below.
         </div>
 
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-600 mb-1">iCal Token (from SSM)</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">iCal Token (from SSM)</label>
           <input
             type="text"
             value={token}
             onChange={e => setToken(e.target.value)}
             placeholder="Paste your token here"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono dark:border-gray-600"
           />
         </div>
 
         {icalUrl && (
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">iCal Feed URL</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">iCal Feed URL</label>
               <div className="flex gap-2">
                 <input readOnly value={icalUrl}
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono bg-gray-50 text-gray-600 truncate" />
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono bg-gray-50 text-gray-600 truncate dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-700" />
                 <button onClick={copyUrl}
-                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition whitespace-nowrap">
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition whitespace-nowrap dark:text-gray-300">
                   {copied ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
@@ -348,14 +348,14 @@ function ICalModal({ apiBase, onClose }) {
               Add to Google Calendar
             </a>
 
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-xs text-gray-400 text-center dark:text-gray-500">
               In Google Calendar: Other calendars → + → From URL → paste the feed URL above
             </p>
           </div>
         )}
 
         {!icalUrl && (
-          <p className="text-xs text-gray-400 text-center mt-2">Enter your token above to generate the feed URL.</p>
+          <p className="text-xs text-gray-400 text-center mt-2 dark:text-gray-500">Enter your token above to generate the feed URL.</p>
         )}
       </div>
     </div>
@@ -465,7 +465,7 @@ function MonthView({ vehicles, bookings, blocksByVin, selectedVins, onToggleVin,
     <div>
       {/* Vehicle filter pills */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <span className="text-xs font-medium text-gray-500 self-center mr-1">Filter:</span>
+        <span className="text-xs font-medium text-gray-500 self-center mr-1 dark:text-gray-400">Filter:</span>
         {vehicles.map((v, i) => {
           const color = CAR_COLORS[i % CAR_COLORS.length];
           const active = selectedVins.includes(v.vin);
@@ -477,7 +477,7 @@ function MonthView({ vehicles, bookings, blocksByVin, selectedVins, onToggleVin,
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition
                 ${active
                   ? `${color.bg} ${color.text} border-transparent`
-                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600'
                 }`}
             >
               {v.imageUrl && (
@@ -493,22 +493,22 @@ function MonthView({ vehicles, bookings, blocksByVin, selectedVins, onToggleVin,
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-3">
         <button onClick={() => setMonthOffset(o => o - 1)}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition">
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
           ← Prev
         </button>
-        <h2 className="text-base font-semibold text-gray-800">{monthLabel}</h2>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">{monthLabel}</h2>
         <button onClick={() => setMonthOffset(o => o + 1)}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition">
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
           Next →
         </button>
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
         {/* Day-of-week headers */}
-        <div className="grid grid-cols-7 border-b border-gray-200">
+        <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-            <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase">
+            <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">
               {d}
             </div>
           ))}
@@ -534,14 +534,14 @@ function MonthView({ vehicles, bookings, blocksByVin, selectedVins, onToggleVin,
                   }
                 }}
                 className={`min-h-[90px] border-r border-b border-gray-100 p-1.5 relative
-                  ${!inMonth ? 'bg-gray-50/60' : ''}
-                  ${todayDay ? 'bg-blue-50' : ''}
-                  ${isPast && inMonth ? 'bg-gray-50/30' : ''}
-                  ${inMonth && selectedVins.length === 1 ? 'cursor-pointer hover:bg-blue-50/40' : ''}
+                  ${!inMonth ? 'bg-gray-50/60 dark:bg-gray-900/40' : ''}
+                  ${todayDay ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+                  ${isPast && inMonth ? 'bg-gray-50/30 dark:bg-gray-900/40' : ''}
+                  ${inMonth && selectedVins.length === 1 ? 'cursor-pointer hover:bg-blue-50/40 dark:bg-blue-900/20' : ''}
                 `}
               >
                 <span className={`text-xs font-medium block mb-1
-                  ${!inMonth ? 'text-gray-300' : todayDay ? 'text-blue-700 font-bold' : 'text-gray-600'}
+                  ${!inMonth ? 'text-gray-300' : todayDay ? 'text-blue-700 font-bold' : 'text-gray-600 dark:text-gray-300'}
                 `}>
                   {d.getDate() === 1
                     ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -582,7 +582,7 @@ function MonthView({ vehicles, bookings, blocksByVin, selectedVins, onToggleVin,
                     );
                   })}
                   {events.length > 3 && (
-                    <div className="text-xs text-gray-400 pl-1">+{events.length - 3} more</div>
+                    <div className="text-xs text-gray-400 pl-1 dark:text-gray-500">+{events.length - 3} more</div>
                   )}
                 </div>
               </div>
@@ -794,9 +794,9 @@ export default function AdminCalendar() {
           {/* ── Header ── */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Fleet Calendar</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fleet Calendar</h1>
               {viewMode === 'gantt' && (
-                <p className="text-sm text-gray-500 mt-0.5">
+                <p className="text-sm text-gray-500 mt-0.5 dark:text-gray-400">
                   {fmtDay(ganttStart)} — {fmtDay(ganttEnd)}
                 </p>
               )}
@@ -804,16 +804,16 @@ export default function AdminCalendar() {
 
             <div className="flex items-center gap-2 flex-wrap">
               {/* View toggle */}
-              <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden dark:border-gray-600">
                 <button
                   onClick={() => setViewMode('gantt')}
-                  className={`px-3 py-1.5 text-sm font-medium transition ${viewMode === 'gantt' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                  className={`px-3 py-1.5 text-sm font-medium transition ${viewMode === 'gantt' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300'}`}
                 >
                   📊 Timeline
                 </button>
                 <button
                   onClick={() => setViewMode('month')}
-                  className={`px-3 py-1.5 text-sm font-medium transition border-l border-gray-300 ${viewMode === 'month' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                  className={`px-3 py-1.5 text-sm font-medium transition border-l border-gray-300 ${viewMode === 'month' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300'}`}
                 >
                   📅 Month
                 </button>
@@ -823,11 +823,11 @@ export default function AdminCalendar() {
               {viewMode === 'gantt' && (
                 <>
                   <button onClick={() => scrollByDays(-30)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition">
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
                     ← Month
                   </button>
                   <button onClick={() => scrollByDays(-7)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition">
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
                     ← Week
                   </button>
                   <button onClick={scrollToToday}
@@ -835,11 +835,11 @@ export default function AdminCalendar() {
                     Today
                   </button>
                   <button onClick={() => scrollByDays(7)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition">
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
                     Week →
                   </button>
                   <button onClick={() => scrollByDays(30)}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition">
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
                     Month →
                   </button>
                 </>
@@ -848,7 +848,7 @@ export default function AdminCalendar() {
               {/* iCal sync */}
               <button
                 onClick={() => setIcalModal(true)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition flex items-center gap-1.5"
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition flex items-center gap-1.5 dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
               >
                 📅 Sync Calendar
               </button>
@@ -868,7 +868,7 @@ export default function AdminCalendar() {
             ].map(({ label, cls }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <div className={`w-3 h-3 rounded-sm ${cls}`} />
-                <span className="text-gray-600">{label}</span>
+                <span className="text-gray-600 dark:text-gray-300">{label}</span>
               </div>
             ))}
           </div>
@@ -879,7 +879,7 @@ export default function AdminCalendar() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
           ) : vehicles.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-12">No vehicles found.</p>
+            <p className="text-gray-400 text-sm text-center py-12 dark:text-gray-500">No vehicles found.</p>
           ) : viewMode === 'month' ? (
             <MonthView
               vehicles={vehicles}
@@ -901,16 +901,16 @@ export default function AdminCalendar() {
              *    containing BOTH the header row and all vehicle rows
              *    so they all scroll together horizontally.
              */
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
               <div className="flex">
                 {/* ── Sticky left label column ── */}
                 <div className="shrink-0 z-20" style={{ width: `${LABEL_WIDTH}px` }}>
                   {/* Header cell */}
                   <div
-                    className="bg-gray-50 border-r border-b border-gray-200 flex items-center px-3 py-2"
+                    className="bg-gray-50 border-r border-b border-gray-200 flex items-center px-3 py-2 dark:bg-gray-900/40 dark:border-gray-700"
                     style={{ height: '40px' }}
                   >
-                    <span className="text-xs font-semibold text-gray-500 uppercase">Vehicle</span>
+                    <span className="text-xs font-semibold text-gray-500 uppercase dark:text-gray-400">Vehicle</span>
                   </div>
                   {/* Vehicle name cells */}
                   {vehicles.map((vehicle, vi) => {
@@ -918,14 +918,14 @@ export default function AdminCalendar() {
                     return (
                       <div
                         key={vehicle.vin}
-                        className={`flex items-center gap-2 px-2 border-r border-b border-gray-200 ${vi % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}
+                        className={`flex items-center gap-2 px-2 border-r border-b border-gray-200 ${vi % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/40 dark:bg-gray-900/40 dark:bg-gray-800/40'}`}
                         style={{ height: `${ROW_HEIGHT_PX}px` }}
                       >
                         {vehicle.imageUrl ? (
                           <img
                             src={vehicle.imageUrl}
                             alt={vName}
-                            className="w-9 h-9 rounded-lg object-cover shrink-0 border border-gray-200"
+                            className="w-9 h-9 rounded-lg object-cover shrink-0 border border-gray-200 dark:border-gray-700"
                           />
                         ) : (
                           <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 text-lg">
@@ -933,7 +933,7 @@ export default function AdminCalendar() {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <span className="text-xs font-medium text-gray-800 truncate block leading-tight">{vName}</span>
+                          <span className="text-xs font-medium text-gray-800 truncate block leading-tight dark:text-gray-100">{vName}</span>
                         </div>
                       </div>
                     );
@@ -949,7 +949,7 @@ export default function AdminCalendar() {
                   <div style={{ width: `${totalWidth}px` }}>
                     {/* Day header row */}
                     <div
-                      className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10"
+                      className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10 dark:bg-gray-900/40 dark:border-gray-700"
                       style={{ height: '40px' }}
                     >
                       {days.map((d, i) => (
@@ -957,11 +957,11 @@ export default function AdminCalendar() {
                           key={i}
                           style={{ width: `${DAY_WIDTH_PX}px` }}
                           className={`shrink-0 text-center py-1 border-r border-gray-100 text-xs font-medium flex flex-col items-center justify-center
-                            ${isToday(d) ? 'bg-blue-50 text-blue-700 font-bold' : isWeekend(d) ? 'text-gray-400 bg-gray-50' : 'text-gray-500'}
+                            ${isToday(d) ? 'bg-blue-50 text-blue-700 font-bold dark:bg-blue-900/20' : isWeekend(d) ? 'text-gray-400 bg-gray-50 dark:bg-gray-900/40 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}
                           `}
                         >
                           {(d.getDate() === 1 || i === 0) ? (
-                            <span className="block text-xs font-bold text-gray-700 leading-none">
+                            <span className="block text-xs font-bold text-gray-700 leading-none dark:text-gray-300">
                               {d.toLocaleDateString('en-US', { month: 'short' })}
                             </span>
                           ) : null}
@@ -990,7 +990,7 @@ export default function AdminCalendar() {
                       return (
                         <div
                           key={vehicle.vin}
-                          className={`relative flex border-b border-gray-100 ${vi % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}
+                          className={`relative flex border-b border-gray-100 ${vi % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/40 dark:bg-gray-900/40 dark:bg-gray-800/40'}`}
                           style={{ height: `${ROW_HEIGHT_PX}px`, width: `${totalWidth}px` }}
                         >
                           {/* Day column backgrounds (clickable to block) */}
@@ -999,7 +999,7 @@ export default function AdminCalendar() {
                               key={i}
                               style={{ width: `${DAY_WIDTH_PX}px` }}
                               className={`shrink-0 h-full border-r border-gray-100 cursor-pointer
-                                ${isToday(d) ? 'bg-blue-50/60' : isWeekend(d) ? 'bg-gray-100/40' : ''}
+                                ${isToday(d) ? 'bg-blue-50/60 dark:bg-blue-900/20' : isWeekend(d) ? 'bg-gray-100/40' : ''}
                                 hover:bg-blue-50/30
                               `}
                               onClick={() => setBlockModal({ vin: vehicle.vin, date: isoDate(d) })}
@@ -1031,7 +1031,7 @@ export default function AdminCalendar() {
 
           {/* ── Footer ── */}
           {!loading && (
-            <p className="text-xs text-gray-400 text-right">
+            <p className="text-xs text-gray-400 text-right dark:text-gray-500">
               {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} · {bookings.length} booking{bookings.length !== 1 ? 's' : ''} total
               {viewMode === 'gantt' && (
                 <span className="ml-2 text-gray-300">· Click any day cell to block dates</span>

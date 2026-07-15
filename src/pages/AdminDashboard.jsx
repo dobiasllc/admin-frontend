@@ -13,7 +13,7 @@ const STATUS_COLORS = {
   available:   'bg-green-100 text-green-700',
   rented:      'bg-blue-100 text-blue-700',
   maintenance: 'bg-yellow-100 text-yellow-700',
-  retired:     'bg-gray-100 text-gray-500',
+  retired:     'bg-gray-100 text-gray-500 dark:text-gray-400',
 };
 
 const STATUS_LABELS = {
@@ -112,13 +112,13 @@ export default function AdminDashboard() {
 
         {/* ── OAuth result banners ── */}
         {teslaConnected && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3 text-sm text-green-800">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3 text-sm text-green-800 dark:bg-green-900/20">
             <span className="text-lg">✅</span>
             <span><strong>Tesla account connected!</strong> Your OAuth tokens have been stored. The token refresher will keep them current automatically.</span>
           </div>
         )}
         {teslaError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-sm text-red-800">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-sm text-red-800 dark:bg-red-900/20">
             <span className="text-lg">❌</span>
             <span><strong>Tesla connection failed</strong> (error {teslaError}). Please try again or check the CloudWatch logs for details.</span>
           </div>
@@ -126,7 +126,7 @@ export default function AdminDashboard() {
 
         {/* ── API error banner ── */}
         {err && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono">{err}</div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 font-mono dark:bg-red-900/20">{err}</div>
         )}
 
         {/* ── Page header ── */}
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
                 >
                   <span>{isOverdue ? '🔴' : '🟡'}</span>
                   <span className="font-medium">{rec.vehicleName}</span>
-                  <span className="text-gray-600">·</span>
+                  <span className="text-gray-600 dark:text-gray-300">·</span>
                   <span>{rec.maintenanceType}</span>
                   <span className="ml-auto font-medium">
                     {isOverdue ? 'Overdue' : 'Due'}: {new Date(rec.nextDueDate).toLocaleDateString()}
@@ -185,7 +185,7 @@ export default function AdminDashboard() {
         {/* When connected: compact single-line indicator to save space */}
         {/* When not connected: full warning card */}
         {teslaStored ? (
-          <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800">
+          <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 dark:bg-green-900/20">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <span className="font-medium">Tesla ✓</span>
             {teslaConnectedAt && (
@@ -194,17 +194,17 @@ export default function AdminDashboard() {
             <Link to="/settings" className="ml-auto text-green-700 hover:underline font-medium">Settings →</Link>
           </div>
         ) : (
-          <div className="rounded-xl border bg-red-50 border-red-200 p-4 flex items-center justify-between gap-4">
+          <div className="rounded-xl border bg-red-50 border-red-200 p-4 flex items-center justify-between gap-4 dark:bg-red-900/20">
             <div className="flex items-center gap-3">
               <span className="text-lg">🔌</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800">Tesla Account Not Connected</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Tesla Account Not Connected</p>
                 <p className="text-xs text-red-700">OAuth tokens required for vehicle commands and guest keys.</p>
               </div>
             </div>
             <Link
               to="/settings"
-              className="shrink-0 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+              className="shrink-0 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
             >
               ⚙ Connect Tesla
             </Link>
@@ -230,10 +230,10 @@ export default function AdminDashboard() {
                 )}
                 <div className="p-4">
                   <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{v.year} {v.make} {v.model}</p>
-                  <p className="text-xs text-gray-400 mb-2">{v.licensePlate}</p>
+                  <p className="text-xs text-gray-400 mb-2 dark:text-gray-500">{v.licensePlate}</p>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[v.status] || 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[v.status] || 'bg-gray-100 text-gray-500 dark:text-gray-400'}`}>
                       {STATUS_LABELS[v.status] || v.status}
                     </span>
                     {v.teslaEnabled && (
@@ -245,20 +245,20 @@ export default function AdminDashboard() {
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full ${guestActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        <span className="text-xs text-gray-600">
-                          Guest Mode: <span className={guestActive ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                        <span className="text-xs text-gray-600 dark:text-gray-300">
+                          Guest Mode: <span className={guestActive ? 'text-green-700 font-medium' : 'text-gray-400 dark:text-gray-500'}>
                             {guestActive ? 'Active' : 'Inactive'}
                           </span>
                         </span>
                       </div>
                       {guestName && (
-                        <p className="text-xs text-gray-500 truncate">👤 {guestName}</p>
+                        <p className="text-xs text-gray-500 truncate dark:text-gray-400">👤 {guestName}</p>
                       )}
                       {eraseStatus && (
                         <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                           eraseStatus === 'erased' ? 'bg-green-100 text-green-700' :
                           eraseStatus === 'failed' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-500'
+                          'bg-gray-100 text-gray-500 dark:text-gray-400'
                         }`}>
                           🗑 Erase: {eraseStatus}
                         </span>
@@ -276,7 +276,7 @@ export default function AdminDashboard() {
               );
             })}
             {(dash?.vehicles || []).length === 0 && (
-              <div className="col-span-4 text-center py-8 text-gray-400 text-sm">
+              <div className="col-span-4 text-center py-8 text-gray-400 text-sm dark:text-gray-500">
                 No active vehicles. <Link to="/vehicles" className="text-blue-600 hover:underline">Add one →</Link>
               </div>
             )}
@@ -290,7 +290,7 @@ export default function AdminDashboard() {
             <Link to="/bookings" className="text-sm text-blue-600 hover:underline">View all →</Link>
           </div>
           {bookings.length === 0 ? (
-            <p className="text-gray-400 text-sm">No upcoming confirmed bookings.</p>
+            <p className="text-gray-400 text-sm dark:text-gray-500">No upcoming confirmed bookings.</p>
           ) : (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
               <table className="w-full text-sm">
@@ -305,7 +305,7 @@ export default function AdminDashboard() {
                   {bookings.map(b => (
                     <tr key={b.bookingId || b.PK} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
 
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{(b.bookingId || '').slice(0, 12)}…</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{(b.bookingId || '').slice(0, 12)}…</td>
                       <td className="px-4 py-3">{b.vin}</td>
                       <td className="px-4 py-3">{new Date(b.startTime).toLocaleDateString()}</td>
                       <td className="px-4 py-3">{new Date(b.endTime).toLocaleDateString()}</td>
