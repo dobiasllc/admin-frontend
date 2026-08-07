@@ -33,6 +33,42 @@ const TABS = [
 const RANGE_STORAGE_KEY = 'adminAnalytics.range';
 const TAB_STORAGE_KEY = 'adminAnalytics.tab';
 
+// ── Formula/explanation text shown in hover tooltips next to metric labels ──
+const FORMULAS = {
+  revenue: 'Sum of booking totals (confirmed/active/completed bookings starting in range) + any manual revenue adjustments.',
+  vehicleCosts: 'Maintenance performed in range + manual cost records dated in range + prorated loan interest + prorated registration + one-time TTR (if purchase date falls in range).',
+  businessExpensesYtd: 'Sum of all Expense Tracker expense records for the current calendar year (Jan 1 – today), regardless of the time range selected above.',
+
+  totalOverhead: 'Vehicle Costs + Business Expenses (YTD).',
+  netProfit: 'Revenue − Vehicle Costs − Business Expenses (YTD).',
+  avgFleetUtilization: 'For each vehicle: booked days ÷ days in range × 100 (booked days are overlap-clipped to the range). Then averaged across all vehicles.',
+  avgProfitPerDay: 'For each vehicle: Net Profit ÷ days in range. Then averaged across all vehicles.',
+  idleDays: 'Days in range − booked days (overlap-clipped to the range) for that vehicle.',
+  bookings: 'Count of bookings (confirmed/active/completed) that started within the selected range.',
+  utilizationCol: 'Booked days (overlap-clipped to range) ÷ days in range × 100.',
+  rpu: 'Total fleet revenue ÷ number of active (non-retired) vehicles.',
+  revenuePerBilledDay: 'Total fleet revenue ÷ total booked days across the fleet.',
+  avgRentalLength: 'Total booked days across the fleet ÷ total number of bookings (booking-count weighted, so vehicles with more bookings count more).',
+  revenueCol: "Sum of this vehicle's booking totals in range + manual revenue adjustment.",
+  vehicleCostsCol: 'Maintenance + manual costs + prorated loan interest + prorated registration + TTR (if applicable), all scoped to the range.',
+  netProfitCol: "This vehicle's Revenue − Vehicle Costs.",
+  perBilledDay: "This vehicle's Revenue ÷ its booked days in range.",
+  rentalLengthCol: "This vehicle's booked days in range ÷ its number of bookings.",
+  perDay: "This vehicle's Net Profit ÷ days in range.",
+  milesCol: 'Odometer delta from pre-trip → post-trip inspections on completed bookings starting in range.',
+  perMile: "This vehicle's total cost in range ÷ miles driven in range.",
+  depreciationCol: "Purchase price − latest OTDcheck estimated market value.",
+  avgOosRate: 'For each vehicle: days marked unavailable/out-of-service (overlap-clipped to range) ÷ days in range × 100. Then averaged across the fleet.',
+  avgMaintPerMile: "Fleet's maintenance cost in range ÷ miles driven in range, averaged per vehicle.",
+  oosRateCol: 'Unavailability (BLOCK#) days overlapping the range ÷ days in range × 100.',
+  maintPerMileCol: 'Maintenance cost in range ÷ miles driven in range.',
+  lifetimeMaint: 'All-time maintenance cost total, purchase-to-date (not scoped to the selected range).',
+  estimatedLine: "Linear interpolation between purchase price and OTDcheck's projected 1/3/5-year depreciation values.",
+  actualLine: "Monthly snapshot of OTDcheck's live market value lookup for this vehicle, recorded once per month.",
+  bookingLeadTime: 'Average of (booking start time − booking created time), in days, across bookings starting in the selected range.',
+};
+
+
 function fmt$(cents) {
   if (cents == null) return '—';
   const sign = cents < 0 ? '-' : '';
@@ -61,7 +97,50 @@ function DeltaBadge({ pct, invert = false }) {
   );
 }
 
+// ── Hover tooltip explaining how a metric is calculated ──────────────────────
+// `position="top"` (default) pops the bubble above the trigger — best for cards
+// and standalone labels. `position="bottom"` pops it below — required inside
+// horizontally-scrolling table wrappers (overflow-x-auto also clips vertical
+// overflow per the CSS spec), otherwise a bubble that pops upward from a table
+// header gets clipped/hidden by the scroll container.
+function InfoTooltip({ text, className = '', position = 'top' }) {
+  if (!text) return null;
+  const isTop = position === 'top';
+  return (
+    <span className={`relative inline-flex group normal-case font-normal ${className}`}>
+      <span
+        tabIndex={0}
+        className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] leading-none text-gray-400 border border-gray-300 cursor-help select-none hover:text-gray-600 hover:border-gray-400 dark:text-gray-500 dark:border-gray-600 dark:hover:text-gray-300"
+      >
+        i
+      </span>
+      <span
+        className={`pointer-events-none absolute z-50 left-1/2 -translate-x-1/2 w-56 rounded-md bg-gray-900 text-white text-[11px] leading-snug px-2.5 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity duration-150 shadow-lg dark:bg-gray-950 ${
+          isTop ? 'bottom-full mb-2' : 'top-full mt-2'
+        }`}
+      >
+        {text}
+        <span className={`absolute left-1/2 -translate-x-1/2 border-4 border-transparent ${
+          isTop ? 'top-full border-t-gray-900 dark:border-t-gray-950' : 'bottom-full border-b-gray-900 dark:border-b-gray-950'
+        }`} />
+      </span>
+    </span>
+  );
+}
+
+
+// Metric label + tooltip, used inline wherever a metric name/header is shown
+function MetricLabel({ label, formula, className = '' }) {
+  return (
+    <span className={`inline-flex items-center ${className}`}>
+      {label}
+      <InfoTooltip text={formula} />
+    </span>
+  );
+}
+
 function RangeSelect({ value, onChange, className = '' }) {
+
   return (
     <select
       value={value}
@@ -235,7 +314,7 @@ function SectionHeader({ icon, title, subtitle }) {
   );
 }
 
-function SortHeader({ label, field, sort, setSort, align = 'right' }) {
+function SortHeader({ label, field, sort, setSort, align = 'right', formula }) {
   const active = sort.field === field;
   const nextDir = active && sort.dir === 'desc' ? 'asc' : 'desc';
   return (
@@ -244,9 +323,12 @@ function SortHeader({ label, field, sort, setSort, align = 'right' }) {
       onClick={() => setSort({ field, dir: nextDir })}
     >
       {label} {active ? (sort.dir === 'desc' ? '▼' : '▲') : <span className="text-gray-300">↕</span>}
+      {formula && <InfoTooltip text={formula} position="bottom" />}
+
     </th>
   );
 }
+
 
 function sortVehicles(vehicles, sort) {
   if (!sort.field) return vehicles;
@@ -348,7 +430,7 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     setTaxLoading(true);
-    api.get(`/admin/tax-expenses?year=${new Date().getFullYear()}`)
+    api.get(`/admin/expenses?year=${new Date().getFullYear()}`)
       .then(r => setTaxExpenses(r.data))
       .catch(() => setTaxExpenses(null))
       .finally(() => setTaxLoading(false));
@@ -561,28 +643,29 @@ export default function AdminAnalytics() {
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center dark:bg-green-900/20">
               <div className="text-xl font-bold text-green-700">{fmt$(fleet.revenueCents)}</div>
               <div className="text-xs text-green-600 mt-1 flex items-center justify-center gap-1 flex-wrap">
-                Revenue ({rangeLabel}) <DeltaBadge pct={fleet.revenueDeltaPct} />
+                Revenue ({rangeLabel}) <InfoTooltip text={FORMULAS.revenue} /> <DeltaBadge pct={fleet.revenueDeltaPct} />
               </div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center dark:bg-red-900/20">
               <div className="text-xl font-bold text-red-700">{fmt$(fleet.totalCostCents)}</div>
-              <div className="text-xs text-red-600 mt-1">Vehicle Costs</div>
+              <div className="text-xs text-red-600 mt-1 flex items-center justify-center">Vehicle Costs <InfoTooltip text={FORMULAS.vehicleCosts} /></div>
             </div>
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center dark:bg-orange-900/20">
               <div className="text-xl font-bold text-orange-700">{fmt$(fleet.totalBusinessExpenseCents)}</div>
-              <div className="text-xs text-orange-600 mt-1">Business Expenses (YTD)</div>
+              <div className="text-xs text-orange-600 mt-1 flex items-center justify-center">Business Expenses (YTD) <InfoTooltip text={FORMULAS.businessExpensesYtd} /></div>
             </div>
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center dark:bg-purple-900/20">
               <div className="text-xl font-bold text-purple-700">{fmt$(fleet.totalBusinessOverheadCents)}</div>
-              <div className="text-xs text-purple-600 mt-1">Total Business Overhead</div>
+              <div className="text-xs text-purple-600 mt-1 flex items-center justify-center">Total Business Overhead <InfoTooltip text={FORMULAS.totalOverhead} /></div>
             </div>
             <div className={`border rounded-lg p-4 text-center ${fleet.profitCents >= 0 ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20' : 'bg-orange-50 border-orange-200 dark:bg-orange-900/20'}`}>
 
               <div className={`text-xl font-bold ${fleet.profitCents >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>{fmt$(fleet.profitCents)}</div>
               <div className={`text-xs mt-1 flex items-center justify-center gap-1 flex-wrap ${fleet.profitCents >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                Net Profit <DeltaBadge pct={fleet.profitDeltaPct} />
+                Net Profit <InfoTooltip text={FORMULAS.netProfit} /> <DeltaBadge pct={fleet.profitDeltaPct} />
               </div>
             </div>
+
           </div>
 
           {/* Insights Panel */}
@@ -615,7 +698,8 @@ export default function AdminAnalytics() {
                 <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
                   {fleet.avgBookingLeadTimeDays != null ? `${fleet.avgBookingLeadTimeDays} d` : '—'}
                 </div>
-                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Avg Booking Lead Time</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Avg Booking Lead Time <InfoTooltip text={FORMULAS.bookingLeadTime} /></div>
+
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-center flex flex-col justify-center dark:bg-gray-900/40">
                 <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">Not currently tracked</div>
@@ -658,13 +742,13 @@ export default function AdminAnalytics() {
                 {fleet.avgUtilizationPct != null ? `${fleet.avgUtilizationPct}%` : '—'}
                 <DeltaBadge pct={fleet.utilizationDeltaPct} />
               </div>
-              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Avg Fleet Utilization <span className="text-gray-400 dark:text-gray-500">(target ~70%)</span></div>
+              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Avg Fleet Utilization <span className="text-gray-400 dark:text-gray-500 ml-1">(target ~70%)</span><InfoTooltip text={FORMULAS.avgFleetUtilization} /></div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
               <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
                 {fmt$(fleet.avgProfitPerDayCents)}
               </div>
-              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Avg Profit / Day</div>
+              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Avg Profit / Day <InfoTooltip text={FORMULAS.avgProfitPerDay} /></div>
             </div>
           </div>
 
@@ -673,11 +757,12 @@ export default function AdminAnalytics() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase dark:bg-gray-900/40 dark:text-gray-300">
                 <tr>
                   <th className="px-3 py-2 text-left">Vehicle</th>
-                  <th className="px-3 py-2 text-right">Utilization ({rangeLabel})</th>
-                  <th className="px-3 py-2 text-right">Idle Days</th>
-                  <th className="px-3 py-2 text-right">Bookings</th>
+                  <th className="px-3 py-2 text-right">Utilization ({rangeLabel}) <InfoTooltip text={FORMULAS.utilizationCol} /></th>
+                  <th className="px-3 py-2 text-right">Idle Days <InfoTooltip text={FORMULAS.idleDays} /></th>
+                  <th className="px-3 py-2 text-right">Bookings <InfoTooltip text={FORMULAS.bookings} /></th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredVehicles.map(v => (
                   <tr key={v.vin} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40">
@@ -722,17 +807,17 @@ export default function AdminAnalytics() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 my-4">
               <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
                 <div className="text-lg font-bold text-gray-800 dark:text-gray-100">{fmt$(fleet.revenuePerUnitCents)}</div>
-                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Revenue per Unit (RPU)</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Revenue per Unit (RPU) <InfoTooltip text={FORMULAS.rpu} /></div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
                 <div className="text-lg font-bold text-gray-800 dark:text-gray-100">{fmt$(fleet.revenuePerBilledDayCents)}</div>
-                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Revenue per Billed Day</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Revenue per Billed Day <InfoTooltip text={FORMULAS.revenuePerBilledDay} /></div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
                 <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
                   {fleet.avgRentalLengthDays != null ? `${fleet.avgRentalLengthDays} d` : '—'}
                 </div>
-                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Avg Rental Length</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Avg Rental Length <InfoTooltip text={FORMULAS.avgRentalLength} /></div>
               </div>
             </div>
 
@@ -741,18 +826,19 @@ export default function AdminAnalytics() {
                 <thead className="bg-gray-50 text-gray-600 text-xs uppercase dark:bg-gray-900/40 dark:text-gray-300">
                   <tr>
                     <SortHeader label="Vehicle" field="name" sort={finSort} setSort={setFinSort} align="left" />
-                    <SortHeader label="Revenue" field="revenueCents" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="Vehicle Costs" field="totalCostCents" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="Net Profit" field="profitCents" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="$/Billed Day" field="revenuePerBilledDayCents" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="Avg Rental Length" field="avgRentalLengthDays" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="$/Day" field="profitPerDayCents" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="Miles" field="odometerMiles" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="$/Mile" field="costPerMile" sort={finSort} setSort={setFinSort} />
-                    <SortHeader label="Depreciation" field="depreciation" sort={finSort} setSort={setFinSort} />
+                    <SortHeader label="Revenue" field="revenueCents" sort={finSort} setSort={setFinSort} formula={FORMULAS.revenueCol} />
+                    <SortHeader label="Vehicle Costs" field="totalCostCents" sort={finSort} setSort={setFinSort} formula={FORMULAS.vehicleCostsCol} />
+                    <SortHeader label="Net Profit" field="profitCents" sort={finSort} setSort={setFinSort} formula={FORMULAS.netProfitCol} />
+                    <SortHeader label="$/Billed Day" field="revenuePerBilledDayCents" sort={finSort} setSort={setFinSort} formula={FORMULAS.perBilledDay} />
+                    <SortHeader label="Avg Rental Length" field="avgRentalLengthDays" sort={finSort} setSort={setFinSort} formula={FORMULAS.rentalLengthCol} />
+                    <SortHeader label="$/Day" field="profitPerDayCents" sort={finSort} setSort={setFinSort} formula={FORMULAS.perDay} />
+                    <SortHeader label="Miles" field="odometerMiles" sort={finSort} setSort={setFinSort} formula={FORMULAS.milesCol} />
+                    <SortHeader label="$/Mile" field="costPerMile" sort={finSort} setSort={setFinSort} formula={FORMULAS.perMile} />
+                    <SortHeader label="Depreciation" field="depreciation" sort={finSort} setSort={setFinSort} formula={FORMULAS.depreciationCol} />
                     <th className="px-3 py-2 text-center">Details</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {sortedFinancialVehicles.map(v => (
                     <tr key={v.vin} className={`hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 ${selectedVin === v.vin ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
@@ -976,13 +1062,13 @@ export default function AdminAnalytics() {
               <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
                 {fleet.avgOosRatePct != null ? `${fleet.avgOosRatePct}%` : '—'}
               </div>
-              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Avg Out-of-Service Rate ({rangeLabel})</div>
+              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Avg Out-of-Service Rate ({rangeLabel}) <InfoTooltip text={FORMULAS.avgOosRate} /></div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
               <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
                 {fleet.avgMaintenanceCostPerMileCents != null ? `$${(fleet.avgMaintenanceCostPerMileCents / 100).toFixed(2)}` : '—'}
               </div>
-              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Avg Maintenance Cost / Mile</div>
+              <div className="text-xs text-gray-500 mt-1 dark:text-gray-400 flex items-center justify-center">Avg Maintenance Cost / Mile <InfoTooltip text={FORMULAS.avgMaintPerMile} /></div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -990,11 +1076,12 @@ export default function AdminAnalytics() {
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase dark:bg-gray-900/40 dark:text-gray-300">
                 <tr>
                   <th className="px-3 py-2 text-left">Vehicle</th>
-                  <th className="px-3 py-2 text-right">OOS Rate</th>
-                  <th className="px-3 py-2 text-right">Maintenance $/Mile</th>
-                  <th className="px-3 py-2 text-right">Lifetime Maintenance</th>
+                  <th className="px-3 py-2 text-right">OOS Rate <InfoTooltip text={FORMULAS.oosRateCol} /></th>
+                  <th className="px-3 py-2 text-right">Maintenance $/Mile <InfoTooltip text={FORMULAS.maintPerMileCol} /></th>
+                  <th className="px-3 py-2 text-right">Lifetime Maintenance <InfoTooltip text={FORMULAS.lifetimeMaint} /></th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {filteredVehicles.map(v => (
                   <tr key={v.vin} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40">
@@ -1019,7 +1106,10 @@ export default function AdminAnalytics() {
       {activeTab === 'depreciation' && (
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-8 dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-700 dark:text-gray-300">📉 Depreciation — Estimated vs. Actual</h2>
+            <h2 className="font-semibold text-gray-700 dark:text-gray-300 flex items-center">
+              📉 Depreciation — Estimated <InfoTooltip text={FORMULAS.estimatedLine} /> vs. Actual <InfoTooltip text={FORMULAS.actualLine} />
+            </h2>
+
             <select value={depVin || ''} onChange={e => setDepVin(e.target.value)}
               className="border border-gray-300 rounded px-2 py-1 text-sm dark:border-gray-600">
               {vehicles.map(v => <option key={v.vin} value={v.vin}>{v.name || v.vin}</option>)}
@@ -1058,13 +1148,15 @@ export default function AdminAnalytics() {
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-2 dark:text-gray-500">
-                Manage individual expense records on the <a href="/admin/taxes" className="text-blue-600 hover:underline">Taxes</a> page.
+                Manage individual expense records on the <a href="/expenses" className="text-blue-600 hover:underline">Expenses</a> page.
               </p>
+
             </>
           ) : (
             <div className="text-gray-400 text-sm italic dark:text-gray-500">
               No business expenses recorded yet for this year. Add them on the{' '}
-              <a href="/admin/taxes" className="text-blue-600 hover:underline">Taxes</a> page.
+              <a href="/expenses" className="text-blue-600 hover:underline">Expenses</a> page.
+
             </div>
           )}
         </div>

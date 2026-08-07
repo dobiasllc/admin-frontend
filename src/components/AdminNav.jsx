@@ -28,7 +28,8 @@ const NAV_ITEMS = [
   { to: '/turo-guests',  label: 'Turo Guests',  icon: '🚙' },
   { to: '/map',          label: 'Live Map',     icon: '🗺' },
   { to: '/analytics',    label: 'Analytics',    icon: '📊' },
-  { to: '/taxes',        label: 'Tax Tracker',  icon: '🧾' },
+  { to: '/expenses',     label: 'Expense Tracker', icon: '🧾' },
+
   { to: '/settings',     label: 'Settings',     icon: '⚙️' },
 ];
 

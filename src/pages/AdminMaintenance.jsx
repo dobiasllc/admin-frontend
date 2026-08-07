@@ -23,8 +23,9 @@ function money(cents) {
   return `$${((cents || 0) / 100).toFixed(2)}`;
 }
 
-// ── Tax Expense Link Picker (browse + search + create-new) ──────────────────
+// ── Expense Link Picker (browse + search + create-new) ───────────────────────
 function TaxLinkPicker({ onSelect, onCreateNew }) {
+
   const api = useApi();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -33,8 +34,12 @@ function TaxLinkPicker({ onSelect, onCreateNew }) {
   const search = useCallback(async (q) => {
     setLoading(true);
     try {
-      const res = await api.get(`/admin/tax-expenses/search?q=${encodeURIComponent(q || "")}&unlinkedOnly=1`);
+      // Note: intentionally NOT passing unlinkedOnly=1 — an expense that's
+      // already linked to one maintenance item should still be selectable
+      // for linking to a second, different item (many-to-many support).
+      const res = await api.get(`/admin/expenses/search?q=${encodeURIComponent(q || "")}`);
       setResults(res.data || []);
+
     } catch (e) { /* ignore */ }
     setLoading(false);
   }, [api]);
@@ -49,8 +54,9 @@ function TaxLinkPicker({ onSelect, onCreateNew }) {
   return (
     <div className="border-t pt-3 dark:border-gray-700">
       <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
-        Link to Tax Tracker Expense (optional — avoids double-entering cost)
+        Link to Expense Tracker Expense (optional — avoids double-entering cost)
       </label>
+
       <input type="text" value={query} onChange={e => setQuery(e.target.value)}
         placeholder="Search by description/merchant, or browse recent below..."
         className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
@@ -71,8 +77,9 @@ function TaxLinkPicker({ onSelect, onCreateNew }) {
       {onCreateNew && (
         <button type="button" onClick={onCreateNew}
           className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline">
-          + Can't find it? Create a new Tax Tracker expense
+          + Can't find it? Create a new Expense Tracker expense
         </button>
+
       )}
     </div>
   );
@@ -95,7 +102,7 @@ function QuickCreateTaxExpenseModal({ defaultDescription, defaultAmountCents, on
     }
     setSaving(true);
     try {
-      const res = await api.post("/admin/tax-expenses", {
+      const res = await api.post("/admin/expenses", {
         category, description, date,
         amountCents: Math.round(parseFloat(amount) * 100),
       });
@@ -559,6 +566,9 @@ function ScheduleBoard({ vehicles, filterVin, setFilterVin, scheduleByVin, setSc
   const [addCustomVin, setAddCustomVin] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
   const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [searchText, setSearchText] = useState("");
 
   const handleDeactivate = async (vin, item) => {
     if (!window.confirm(`${item.isCustom ? "Delete" : "Stop tracking"} "${item.label}"?`)) return;
@@ -597,7 +607,22 @@ function ScheduleBoard({ vehicles, filterVin, setFilterVin, scheduleByVin, setSc
   const statusRank = { red: 0, yellow: 1, green: 2, gray: 3 };
   activeRows.sort((a, b) => (statusRank[a.item.status] ?? 4) - (statusRank[b.item.status] ?? 4));
 
+  // Categories present across all active rows (for the category filter dropdown)
+  const availableCategories = Array.from(new Set(activeRows.map(r => r.item.category).filter(Boolean))).sort();
+
+  const displayedRows = activeRows.filter(({ vin, item }) => {
+    if (statusFilter !== "all" && item.status !== statusFilter) return false;
+    if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      const hay = `${item.label || ""} ${item.category || ""} ${vehicleName(vin)}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
   // Group inactive (suggested/not-tracked) items by category for scanability.
+
   const inactiveByCategory = {};
   inactiveRows.forEach(({ vin, item }) => {
     const cat = item.category || "Other";
@@ -619,6 +644,34 @@ function ScheduleBoard({ vehicles, filterVin, setFilterVin, scheduleByVin, setSc
             + Add Custom Item
           </button>
         )}
+
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="px-2 py-1 text-xs rounded border dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+          <option value="all">All Statuses</option>
+          <option value="red">Overdue</option>
+          <option value="yellow">Due Soon</option>
+          <option value="green">OK</option>
+          <option value="gray">As Needed</option>
+        </select>
+
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+          className="px-2 py-1 text-xs rounded border dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+          <option value="all">All Categories</option>
+          {availableCategories.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+
+        <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)}
+          placeholder="Search item/vehicle..."
+          className="px-2 py-1 text-xs rounded border dark:border-gray-600 dark:bg-gray-700 dark:text-white" />
+
+        {(statusFilter !== "all" || categoryFilter !== "all" || searchText) && (
+          <button onClick={() => { setStatusFilter("all"); setCategoryFilter("all"); setSearchText(""); }}
+            className="px-2 py-1 text-xs rounded border dark:border-gray-600 dark:text-gray-300">
+            Clear Filters
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded border dark:border-gray-700">
@@ -635,7 +688,7 @@ function ScheduleBoard({ vehicles, filterVin, setFilterVin, scheduleByVin, setSc
             </tr>
           </thead>
           <tbody className="divide-y dark:divide-gray-700">
-            {activeRows.map(({ vin, item }) => {
+            {displayedRows.map(({ vin, item }) => {
               const meta = STATUS_META[item.status] || STATUS_META.gray;
               return (
                 <tr key={`${vin}-${item.itemKey}`} className={meta.row}>
@@ -676,9 +729,11 @@ function ScheduleBoard({ vehicles, filterVin, setFilterVin, scheduleByVin, setSc
                 </tr>
               );
             })}
-            {activeRows.length === 0 && (
+            {displayedRows.length === 0 && (
               <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-400">
-                No items currently tracked{filterVin ? " for this vehicle" : ""}. Use "Suggested Items" below to start tracking.
+                {activeRows.length === 0
+                  ? `No items currently tracked${filterVin ? " for this vehicle" : ""}. Use "Suggested Items" below to start tracking.`
+                  : "No items match the current filters."}
               </td></tr>
             )}
           </tbody>
@@ -781,7 +836,7 @@ function EditHistoryRecordModal({ record, onClose, onSaved }) {
   useEffect(() => {
     let cancelled = false;
     if (record.linkedTaxExpenseTs) {
-      api.get(`/admin/tax-expenses/${encodeURIComponent(record.linkedTaxExpenseTs)}`)
+      api.get(`/admin/expenses/${encodeURIComponent(record.linkedTaxExpenseTs)}`)
         .then(res => { if (!cancelled) setSelectedLink(res.data); })
         .catch(() => {})
         .finally(() => { if (!cancelled) setLinkLoaded(true); });
@@ -954,7 +1009,7 @@ function HistoryTable({ vehicles, filterVin, refreshKey, onChanged }) {
     if (uniqueTs.length) {
       const entries = await Promise.all(uniqueTs.map(async (ts) => {
         try {
-          const res = await api.get(`/admin/tax-expenses/${encodeURIComponent(ts)}`);
+          const res = await api.get(`/admin/expenses/${encodeURIComponent(ts)}`);
           return [ts, res.data];
         } catch (e) {
           return [ts, null];

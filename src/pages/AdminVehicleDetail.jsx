@@ -245,7 +245,9 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
     ['ttrCents', 'TTR — Tax/Title/Registration ($, one-time)', 'number'],
     ['annualRegistrationCents', 'Annual Registration ($/yr)', 'number'],
     ['totalOdometerMiles', 'Odometer (mi)', 'number'],
+    ['purchaseOdometerMiles', '⚠️ Purchase Odometer (mi) — used for $/mile calcs, edit only to correct errors', 'number'],
     ['loanPrincipalCents', 'Loan Principal ($)', 'number'],
+
 
     ['loanAPR', 'APR (e.g. 0.0649 for 6.49%)', 'number'],
     ['loanTermMonths', 'Loan Term (months)', 'number'],
@@ -863,6 +865,11 @@ function MaintenanceSchedulePanel({ vin }) {
                   <td className="px-2 py-2 whitespace-nowrap">
                     {item.label}
                     <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded dark:text-gray-400">{item.category}</span>
+                    {item.resetsItemKeys && item.resetsItemKeys.length > 0 && (
+                      <span className="ml-1 text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded dark:bg-purple-900/30" title={`Resets: ${item.resetsItemKeys.join(', ')}`}>
+                        🔄 auto-resets related items
+                      </span>
+                    )}
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                     {item.lastPerformedAt ? fmtDate(item.lastPerformedAt) : '—'}
@@ -929,6 +936,15 @@ function MaintenanceSchedulePanel({ vin }) {
 }
 
 
+const MAINT_SORT_OPTIONS = [
+  { value: 'date_desc', label: 'Date (Newest First)' },
+  { value: 'date_asc',  label: 'Date (Oldest First)' },
+  { value: 'cost_desc', label: 'Cost (Highest First)' },
+  { value: 'cost_asc',  label: 'Cost (Lowest First)' },
+  { value: 'mileage_desc', label: 'Mileage (Highest First)' },
+  { value: 'mileage_asc',  label: 'Mileage (Lowest First)' },
+];
+
 // ── Maintenance Panel ────────────────────────────────────────────────────────
 function MaintenancePanel({ vin }) {
   const api = useApi();
@@ -939,6 +955,14 @@ function MaintenancePanel({ vin }) {
   const [form, setForm] = useState({ maintenanceType: 'Other', description: '', mileageAtService: '', performedBy: '', cost: '', performedAt: new Date().toISOString().slice(0, 10), isPublic: false });
   const [showForm, setShowForm] = useState(false);
 
+  // Filters
+  const [searchText, setSearchText]   = useState('');
+  const [typeFilter, setTypeFilter]   = useState('all');
+  const [startDate, setStartDate]     = useState('');
+  const [endDate, setEndDate]         = useState('');
+  const [sortBy, setSortBy]           = useState('date_desc');
+  const [publicOnly, setPublicOnly]   = useState(false);
+
   const load = useCallback(() => {
     setLoading(true);
     api.get(`/admin/vehicles/${vin}/maintenance`)
@@ -948,6 +972,38 @@ function MaintenancePanel({ vin }) {
   }, [api, vin]);
 
   useEffect(load, [load]);
+
+  const availableTypes = Array.from(new Set(records.map(r => r.maintenanceType).filter(Boolean))).sort();
+
+  const filteredRecords = records
+    .filter(m => {
+      if (typeFilter !== 'all' && m.maintenanceType !== typeFilter) return false;
+      if (publicOnly && !m.isPublic) return false;
+      if (startDate && (m.performedAt || '') < startDate) return false;
+      if (endDate && (m.performedAt || '') > endDate) return false;
+      if (searchText.trim()) {
+        const q = searchText.trim().toLowerCase();
+        const hay = `${m.maintenanceType || ''} ${m.description || ''} ${m.notes || ''} ${m.performedBy || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'date_asc':    return (a.performedAt || '').localeCompare(b.performedAt || '');
+        case 'cost_desc':   return (b.cost || 0) - (a.cost || 0);
+        case 'cost_asc':    return (a.cost || 0) - (b.cost || 0);
+        case 'mileage_desc':return (b.mileageAtService || 0) - (a.mileageAtService || 0);
+        case 'mileage_asc': return (a.mileageAtService || 0) - (b.mileageAtService || 0);
+        case 'date_desc':
+        default:            return (b.performedAt || '').localeCompare(a.performedAt || '');
+      }
+    });
+
+  const resetFilters = () => {
+    setSearchText(''); setTypeFilter('all'); setStartDate(''); setEndDate('');
+    setSortBy('date_desc'); setPublicOnly(false);
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -1011,18 +1067,67 @@ function MaintenancePanel({ vin }) {
         </form>
       )}
 
+      {records.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 items-end bg-gray-50 rounded-lg p-3 dark:bg-gray-900/40">
+          <div className="col-span-2">
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">Search</label>
+            <input type="text" placeholder="Description, notes, mechanic…" value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">Type</label>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600">
+              <option value="all">All Types</option>
+              {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">From</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">To</label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">Sort By</label>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600">
+              {MAINT_SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2 md:col-span-6 flex items-center justify-between mt-1">
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+              <input type="checkbox" checked={publicOnly} onChange={e => setPublicOnly(e.target.checked)} />
+              Public only
+            </label>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400 dark:text-gray-500">{filteredRecords.length} of {records.length} records</span>
+              <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline">Reset Filters</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
       ) : records.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-gray-500">No maintenance records.</p>
+      ) : filteredRecords.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-gray-500">No records match the current filters.</p>
       ) : (
         <div className="space-y-3">
-          {records.map((m, i) => (
-            <div key={i} className="border border-gray-100 rounded-lg p-3 text-sm dark:border-gray-700">
+          {filteredRecords.map((m, i) => (
+            <div key={m.timestamp || i} className="border border-gray-100 rounded-lg p-3 text-sm dark:border-gray-700">
               <div className="flex justify-between">
                 <span className="font-medium">{m.maintenanceType}</span>
                 <div className="flex items-center gap-2">
                   {m.isPublic && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Public</span>}
+                  {m.linkedTaxExpenseTs && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30">🧾 Linked Expense</span>}
                   <button onClick={() => handleDelete(m.timestamp)} className="text-xs text-red-500 hover:underline">Delete</button>
                 </div>
               </div>

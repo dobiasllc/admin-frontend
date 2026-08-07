@@ -9,8 +9,11 @@ import AdminBookingDetail from './pages/AdminBookingDetail';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminUsers from './pages/AdminUsers';
 import AdminAnalytics from './pages/AdminAnalytics';
-import AdminTaxes from './pages/AdminTaxes';
+import AdminExpenses from './pages/AdminExpenses';
+
 import AdminTuroGuests from './pages/AdminTuroGuests';
+// (AdminTaxes removed — replaced by AdminExpenses; /taxes now redirects to /expenses)
+
 import AdminVehicles from './pages/AdminVehicles';
 import AdminVehicleDetail from './pages/AdminVehicleDetail';
 import AdminMap from './pages/AdminMap';
@@ -74,9 +77,11 @@ function App() {
         <Route path="/analytics"
           element={<AdminRoute><AdminAnalytics /></AdminRoute>}
         />
-        <Route path="/taxes"
-          element={<AdminRoute><AdminTaxes /></AdminRoute>}
+        <Route path="/expenses"
+          element={<AdminRoute><AdminExpenses /></AdminRoute>}
         />
+        <Route path="/taxes" element={<Navigate to="/expenses" replace />} />
+
         <Route path="/turo-guests"
           element={<AdminRoute><AdminTuroGuests /></AdminRoute>}
         />
