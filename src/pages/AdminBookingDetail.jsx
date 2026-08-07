@@ -687,7 +687,7 @@ function GuestKeyPanel({ booking, onRefresh }) {
   if (!isTesla) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Tesla Guest Key</h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Guest Mode</h2>
         <p className="text-sm text-gray-400 dark:text-gray-500">Not applicable — this vehicle is not Tesla-enabled.</p>
       </div>
     );
@@ -696,7 +696,8 @@ function GuestKeyPanel({ booking, onRefresh }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Tesla Guest Key</h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Guest Mode</h2>
+
         <div className="flex items-center gap-2">
           {gkStatus && (
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${GK_STATUS_COLORS[gkStatus] || "bg-gray-100 text-gray-600 dark:text-gray-300"}`}>
@@ -893,7 +894,110 @@ function GuestKeyPanel({ booking, onRefresh }) {
   );
 }
 
+// ── Guest Key (Driver Invite) Panel ────────────────────────────────────────────
+// Distinct from Guest Mode above — this is the real Tesla "add a driver" invite
+// link feature, useful for temporary drivers / delivery handoffs.
+function DriverKeyPanel({ booking, onRefresh }) {
+  const api = useApi();
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  const isTesla = booking.teslaEnabled || booking.vin?.startsWith("5YJ") || booking.vin?.startsWith("7SA");
+  const enabled = !!booking.driverKeyEnabled;
+  const status  = booking.driverInviteStatus || "none";
+  const expiresAt = booking.driverInviteExpiresAt || "";
+  const isExpired = status === "active" && expiresAt && new Date(expiresAt).getTime() < Date.now();
+  const effStatus = isExpired ? "expired" : status;
+
+  if (!isTesla) return null;
+
+  const call = async (path) => {
+    setLoading(true); setMsg(""); setErr("");
+    try {
+      await api.post(`/admin/driver-keys/${booking.bookingId}/${path}`);
+      setMsg("✓ Done");
+      onRefresh();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Action failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const enableForBooking = async () => {
+    setLoading(true); setMsg(""); setErr("");
+    try {
+      await api.post("/admin/driver-keys/enable", { booking_id: booking.bookingId });
+      setMsg("✓ Guest Key option added to this booking's portal");
+      onRefresh();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed to enable Guest Key");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Guest Key (Driver Invite)</h2>
+        {enabled && (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            effStatus === "active" ? "bg-green-100 text-green-800" :
+            effStatus === "revoked" ? "bg-red-100 text-red-800" :
+            effStatus === "expired" ? "bg-yellow-100 text-yellow-800" :
+            "bg-gray-100 text-gray-500 dark:text-gray-400"
+          }`}>
+            {effStatus === "active" ? "Key link active" : effStatus === "revoked" ? "Revoked" : effStatus === "expired" ? "Expired" : "No key created yet"}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
+        Lets a guest add their own Tesla account as a driver — separate from Guest Mode above.
+        Manage all Guest Keys from the <a href="/admin/driver-keys" className="text-blue-600 hover:underline">Guest Keys</a> page.
+      </p>
+
+      {msg && <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700 dark:bg-green-900/20">{msg}</div>}
+      {err && <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{err}</div>}
+
+      {!enabled ? (
+        <button onClick={enableForBooking} disabled={loading}
+          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+          {loading ? "Working…" : "+ Add Guest Key Option to Portal"}
+        </button>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {effStatus !== "active" && (
+            <button onClick={() => call("create-invite")} disabled={loading}
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? "Working…" : "Create Key Link"}
+            </button>
+          )}
+          {effStatus === "active" && (
+            <>
+              <button onClick={() => call("create-invite")} disabled={loading}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                Regenerate
+              </button>
+              <button onClick={() => { if (window.confirm("Revoke the active key link?")) call("revoke-invite"); }} disabled={loading}
+                className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50">
+                Revoke
+              </button>
+            </>
+          )}
+          <button onClick={() => { if (window.confirm("Remove the Guest Key option from this booking's portal?")) call("disable"); }} disabled={loading}
+            className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600 disabled:opacity-50">
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Booking Readiness Banner ───────────────────────────────────────────────────
+
 // Shows a warning if a private/admin booking is confirmed but not yet paid or signed.
 function ReadinessBanner({ booking }) {
   const source = booking.source || "private";
@@ -1387,8 +1491,12 @@ export default function AdminBookingDetail() {
           <ContractPanel booking={booking} onRefresh={reload} />
         )}
 
-        {/* Tesla Guest Key Panel */}
+        {/* Guest Mode Panel */}
         <GuestKeyPanel booking={booking} onRefresh={reload} />
+
+        {/* Guest Key (Driver Invite) Panel */}
+        <DriverKeyPanel booking={booking} onRefresh={reload} />
+
 
         {/* Inspections */}
         {(preTrip || postTrip) && (

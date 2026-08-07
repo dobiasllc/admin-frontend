@@ -802,9 +802,11 @@ export default function AdminGuestKeys() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Tesla Guest Keys</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Guest Mode</h1>
             <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
-              Manage Tesla digital key invitations for all bookings
+              Manage the Bluetooth "Guest Mode" pairing window for each booking's guest portal.
+              Looking for driver key invites instead?{" "}
+              <a href="/admin/driver-keys" className="text-blue-600 hover:underline">Go to Guest Keys →</a>
             </p>
           </div>
           <div className="flex gap-3">
@@ -815,9 +817,10 @@ export default function AdminGuestKeys() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Create Key
+              Create Ad-hoc Guest Mode Window
             </button>
             <button
+
               onClick={fetchKeys}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 shadow-sm dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
             >

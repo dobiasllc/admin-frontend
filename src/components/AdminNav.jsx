@@ -24,7 +24,9 @@ const NAV_ITEMS = [
   { to: '/vehicles',     label: 'Vehicles',     icon: '🚗' },
   { to: '/maintenance',  label: 'Maintenance',  icon: '🔧' },
   { to: '/users',        label: 'Users',        icon: '👥' },
-  { to: '/guest-keys',   label: 'Guest Keys',   icon: '🔑' },
+  { to: '/guest-keys',   label: 'Guest Mode',   icon: '📱' },
+  { to: '/driver-keys',  label: 'Guest Keys',   icon: '🔑' },
+
   { to: '/turo-guests',  label: 'Turo Guests',  icon: '🚙' },
   { to: '/map',          label: 'Live Map',     icon: '🗺' },
   { to: '/analytics',    label: 'Analytics',    icon: '📊' },

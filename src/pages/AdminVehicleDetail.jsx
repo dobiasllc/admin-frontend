@@ -528,7 +528,12 @@ function GuestKeysPanel({ vin }) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Guest Mode & Guest Keys</h2>
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Guest Mode History</h2>
+      <p className="text-xs text-gray-400 mb-4 -mt-2 dark:text-gray-500">
+        Bluetooth pairing windows for renters. Looking for Tesla driver invite links instead?{" "}
+        <Link to="/driver-keys" className="text-blue-600 hover:underline">Go to Guest Keys →</Link>
+      </p>
+
       {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
       {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
       {loading ? (

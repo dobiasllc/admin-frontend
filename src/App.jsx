@@ -18,6 +18,8 @@ import AdminVehicles from './pages/AdminVehicles';
 import AdminVehicleDetail from './pages/AdminVehicleDetail';
 import AdminMap from './pages/AdminMap';
 import AdminGuestKeys from './pages/AdminGuestKeys';
+import AdminDriverKeys from './pages/AdminDriverKeys';
+
 import AdminCreateBooking from './pages/AdminCreateBooking';
 import AdminPrintContract from './pages/AdminPrintContract';
 import AdminSettings from './pages/AdminSettings';
@@ -68,6 +70,10 @@ function App() {
         <Route path="/guest-keys"
           element={<AdminRoute><AdminGuestKeys /></AdminRoute>}
         />
+        <Route path="/driver-keys"
+          element={<AdminRoute><AdminDriverKeys /></AdminRoute>}
+        />
+
         <Route path="/maintenance"
           element={<AdminRoute><AdminMaintenance /></AdminRoute>}
         />
