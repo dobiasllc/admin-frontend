@@ -217,7 +217,10 @@ function PhotoGalleryPanel({ vin }) {
 }
 
 // ── Editable Fields Panel ────────────────────────────────────────────────────
+const VEHICLE_TYPES = ['sedan', 'suv', 'truck', 'minivan', 'sports', 'coupe'];
+
 function EditableFieldsPanel({ vehicle, onSaved }) {
+
   const api = useApi();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(vehicle);
@@ -254,11 +257,27 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
     ['loanStartDate', 'Loan Start Date', 'date'],
   ];
 
+  const homeAddressFields = [
+    ['homeAddress', 'Home Address', 'text'],
+    ['homeCity', 'Home City', 'text'],
+    ['homeState', 'Home State', 'text'],
+    ['homeZip', 'Home Zip', 'text'],
+  ];
+
+
   const handleSave = async () => {
     setSaving(true); setErr(''); setMsg('');
     try {
-      const payload = { ...form, year: Number(form.year), dailyRateCents: Number(form.dailyRateCents) };
+      const payload = {
+        ...form,
+        year: Number(form.year),
+        dailyRateCents: Number(form.dailyRateCents),
+        unlimitedMileageFeeCents: form.unlimitedMileageFeeCents === '' || form.unlimitedMileageFeeCents == null ? 0 : Math.round(Number(form.unlimitedMileageFeeCents) * 100),
+        deliveryFeeCents: form.deliveryFeeCents === '' || form.deliveryFeeCents == null ? 0 : Math.round(Number(form.deliveryFeeCents) * 100),
+        prepaidEnergyFeeCents: form.prepaidEnergyFeeCents === '' || form.prepaidEnergyFeeCents == null ? 0 : Math.round(Number(form.prepaidEnergyFeeCents) * 100),
+      };
       await api.put(`/admin/vehicles/${vehicle.vin}`, payload);
+
       setMsg('Vehicle updated.');
       setEditing(false);
       onSaved();
@@ -309,17 +328,68 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
               {['private', 'turo', 'both'].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Vehicle Type</label>
+            <select value={form.vehicleType || ''} onChange={e => setForm(f => ({ ...f, vehicleType: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
+              <option value="">— none —</option>
+              {VEHICLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Extras Pricing ($)</p>
+          </div>
+          {[
+            ['unlimitedMileageFeeCents', 'Unlimited Mileage Fee ($/day)'],
+            ['deliveryFeeCents', 'Delivery Fee ($, flat)'],
+            ['prepaidEnergyFeeCents', 'Prepaid Energy Fee ($, flat)'],
+          ].map(([key, label]) => (
+            <div key={key}>
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
+              <input type="number" step="0.01"
+                value={form[key] === 0 || form[key] ? (typeof form[key] === 'number' ? form[key] / 100 : form[key]) : ''}
+                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+            </div>
+          ))}
+
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Additional Image URLs (one per line)</label>
+            <textarea rows={3} value={(form.imageUrls || []).join('\n')}
+              onChange={e => setForm(f => ({ ...f, imageUrls: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+          </div>
+
           <div className="col-span-2 flex items-center gap-2">
             <input type="checkbox" id="teslaEnabled" checked={!!form.teslaEnabled}
               onChange={e => setForm(f => ({ ...f, teslaEnabled: e.target.checked }))} />
             <label htmlFor="teslaEnabled" className="text-sm text-gray-700 dark:text-gray-300">Tesla Enabled</label>
           </div>
+
+          <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Home Base Address (used for WI sales tax lookup on "No Delivery" bookings)</p>
+          </div>
+          {homeAddressFields.map(([key, label, type]) => (
+            <div key={key}>
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
+              <input type={type} value={form[key] ?? ''}
+                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+            </div>
+          ))}
         </div>
       ) : (
+
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Color</dt><dd>{vehicle.color || '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Daily Rate</dt><dd>{fmtMoney(vehicle.dailyRateCents)}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Default Source</dt><dd className="capitalize">{vehicle.defaultSource || '—'}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Vehicle Type</dt><dd className="capitalize">{vehicle.vehicleType || '—'}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Unlimited Mileage Fee</dt><dd>{fmtMoney(vehicle.unlimitedMileageFeeCents)}/day</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Delivery Fee</dt><dd>{fmtMoney(vehicle.deliveryFeeCents)}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Prepaid Energy Fee</dt><dd>{fmtMoney(vehicle.prepaidEnergyFeeCents)}</dd></div>
+
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Free Miles/Day</dt><dd>{vehicle.freeMilesPerDay ?? '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Tesla Enabled</dt><dd>{vehicle.teslaEnabled ? 'Yes' : 'No'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Lockbox Code</dt><dd>{vehicle.lockboxCode || '—'}</dd></div>
@@ -329,8 +399,11 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan Principal</dt><dd>{vehicle.loanPrincipalCents ? `$${Number(vehicle.loanPrincipalCents).toLocaleString()}` : '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan APR</dt><dd>{vehicle.loanAPR || '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Annual Registration</dt><dd>{vehicle.annualRegistrationCents ? `$${Number(vehicle.annualRegistrationCents).toLocaleString()}` : '—'}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Home Address</dt><dd>{vehicle.homeAddress || '—'}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Home City/State/Zip</dt><dd>{[vehicle.homeCity, vehicle.homeState, vehicle.homeZip].filter(Boolean).join(', ') || '—'}</dd></div>
           <div>
             <dt className="text-gray-400 text-xs dark:text-gray-500">Odometer</dt>
+
             <dd>
               {vehicle.totalOdometerMiles != null ? `${Number(vehicle.totalOdometerMiles).toLocaleString()} mi` : '—'}
               {vehicle.odometerSource && (

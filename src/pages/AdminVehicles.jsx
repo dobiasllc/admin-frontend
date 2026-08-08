@@ -22,15 +22,23 @@ const STATUS_LABELS = {
   retired:     'Retired',
 };
 
+const VEHICLE_TYPES = ['sedan', 'suv', 'truck', 'minivan', 'sports', 'coupe'];
+
 const BLANK_VEHICLE = {
   vin: '', make: '', model: '', year: '', licensePlate: '', color: '',
   status: 'available', teslaEnabled: false, dailyRateCents: '',
   defaultSource: 'private', imageUrl: '', lockboxCode: '',
   freeMilesPerDay: '', teslaVehicleId: '', teslaAccountId: '', ownerUserId: '',
   purchasePrice: '', purchaseDate: '',
+  rentalStartDate: '', rentalStartOdometerMiles: '',
   loanPrincipalCents: '', loanAPR: '', loanTermMonths: '', loanStartDate: '',
   ttrCents: '', annualRegistrationCents: '', totalOdometerMiles: '',
+  vehicleType: '', unlimitedMileageFeeCents: '', deliveryFeeCents: '',
+  prepaidEnergyFeeCents: '', imageUrls: [],
+  homeAddress: '', homeCity: '', homeState: 'WI', homeZip: '',
 };
+
+
 
 
 // ── Add Vehicle Modal ────────────────────────────────────────────────────────
@@ -44,10 +52,18 @@ function AddVehicleModal({ onClose, onSaved }) {
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      const payload = { ...form, year: Number(form.year), dailyRateCents: Number(form.dailyRateCents) };
+      const payload = {
+        ...form,
+        year: Number(form.year),
+        dailyRateCents: Number(form.dailyRateCents),
+        unlimitedMileageFeeCents: form.unlimitedMileageFeeCents === '' ? 0 : Math.round(Number(form.unlimitedMileageFeeCents) * 100),
+        deliveryFeeCents: form.deliveryFeeCents === '' ? 0 : Math.round(Number(form.deliveryFeeCents) * 100),
+        prepaidEnergyFeeCents: form.prepaidEnergyFeeCents === '' ? 0 : Math.round(Number(form.prepaidEnergyFeeCents) * 100),
+      };
       await api.post('/admin/vehicles', payload);
       onSaved();
     } catch (e2) {
+
       setErr(e2.response?.data?.error || 'Save failed.');
     } finally {
       setSaving(false);
@@ -102,9 +118,59 @@ function AddVehicleModal({ onClose, onSaved }) {
                 {['private', 'turo', 'both'].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Vehicle Type</label>
+              <select value={form.vehicleType} onChange={e => setForm(f => ({ ...f, vehicleType: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
+                <option value="">— none —</option>
+                {VEHICLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Extras Pricing ($, per rental unless noted)</p>
+            </div>
+            {[
+              ['unlimitedMileageFeeCents', 'Unlimited Mileage Fee ($/day)', 'number'],
+              ['deliveryFeeCents', 'Delivery Fee ($, flat)', 'number'],
+              ['prepaidEnergyFeeCents', 'Prepaid Energy Fee ($, flat)', 'number'],
+            ].map(([key, label, type]) => (
+              <div key={key}>
+                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
+                <input type={type} step="0.01" value={form[key] || ''}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+              </div>
+            ))}
+
+            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Home Base Address (used for WI sales tax lookup on "No Delivery" bookings)</p>
+            </div>
+            {[
+              ['homeAddress', 'Street Address', 'text'],
+              ['homeCity', 'City', 'text'],
+              ['homeState', 'State', 'text'],
+              ['homeZip', 'Zip Code', 'text'],
+            ].map(([key, label, type]) => (
+              <div key={key}>
+                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
+                <input type={type} value={form[key] || ''}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+              </div>
+            ))}
+
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Additional Image URLs (one per line)</label>
+
+              <textarea rows={3} value={(form.imageUrls || []).join('\n')}
+                onChange={e => setForm(f => ({ ...f, imageUrls: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+            </div>
 
             <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Acquisition Cost</p>
+
               <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
                 Enter once at purchase. Market value is refreshed automatically each month via OTDcheck.
               </p>
@@ -114,6 +180,26 @@ function AddVehicleModal({ onClose, onSaved }) {
               ['purchaseDate', 'Purchase Date', 'date'],
               ['ttrCents', 'TTR — Tax/Title/Registration ($, one-time)', 'number'],
               ['annualRegistrationCents', 'Annual Registration ($/yr)', 'number'],
+            ].map(([key, label, type]) => (
+              <div key={key}>
+                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
+                <input type={type} value={form[key] || ''}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+              </div>
+            ))}
+
+            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Rental Service Start (optional, recommended)</p>
+              <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
+                When this vehicle first became available for rental (if different from purchase date), and its
+                odometer reading at that time. Improves accuracy of "All time" analytics (utilization, $/mile,
+                $/day). If left blank, purchase date and lifetime odometer are used instead.
+              </p>
+            </div>
+            {[
+              ['rentalStartDate', 'Rental Start Date', 'date'],
+              ['rentalStartOdometerMiles', 'Rental Start Odometer (mi)', 'number'],
             ].map(([key, label, type]) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>

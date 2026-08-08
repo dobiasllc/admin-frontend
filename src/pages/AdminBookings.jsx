@@ -12,14 +12,16 @@
  *    timestamp) so a trip starting today never drops out of "Current"
  *    just because the clock has passed its start time-of-day.
  *  - "All | Current | Upcoming | Past" tab control for focused viewing.
- *  - "Import Turo CSV" button + modal for bulk-importing/repairing Turo
- *    bookings from Turo's "Trip earnings export" CSV.
+ *  - "Import Turo CSV" via the shared TuroCsvImportButton component for
+ *    bulk-importing/repairing Turo bookings from Turo's "Trip earnings
+ *    export" CSV.
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
 import { normalisePortalUrl } from '../utils/guestPortal';
+import TuroCsvImportButton from '../components/TuroCsvImportButton';
 
 const STATUS_COLORS = {
   pending:   'bg-yellow-100 text-yellow-700',
@@ -60,14 +62,6 @@ export default function AdminBookings() {
   const [loading, setLoading]     = useState(true);
   const [copiedId, setCopiedId]   = useState('');
 
-  // Turo CSV import modal state
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importFile, setImportFile]     = useState(null);
-  const [importing, setImporting]       = useState(false);
-  const [importResult, setImportResult] = useState(null);
-  const [importError, setImportError]   = useState('');
-
-
   const status = params.get('status') || '';
   const source = params.get('source') || '';
 
@@ -84,7 +78,8 @@ export default function AdminBookings() {
       .catch(console.error);
   }, []);
 
-  const refreshBookings = () => {
+  // Fetch bookings whenever filters change
+  const loadBookings = () => {
     setLoading(true);
     const q = new URLSearchParams();
     if (status) q.set('status', status);
@@ -95,9 +90,9 @@ export default function AdminBookings() {
       .finally(() => setLoading(false));
   };
 
-  // Fetch bookings whenever filters change
   useEffect(() => {
-    refreshBookings();
+    loadBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, source]);
 
   const setFilter = (key, val) => {
@@ -249,17 +244,7 @@ export default function AdminBookings() {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Bookings</h1>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setImportResult(null);
-                  setImportError('');
-                  setImportFile(null);
-                  setShowImportModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 border border-orange-300 text-orange-700 bg-orange-50 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-orange-100 transition dark:bg-orange-900/20 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-900/30"
-              >
-                📥 Import Turo CSV
-              </button>
+              <TuroCsvImportButton onImported={loadBookings} />
               <Link
                 to="/bookings/new"
                 className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -455,98 +440,6 @@ export default function AdminBookings() {
           </p>
         </div>
       </div>
-
-      {/* ── Import Turo CSV Modal ── */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Import Turo CSV</h2>
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Upload Turo's "Trip earnings export" CSV. Bookings are upserted with{' '}
-              <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">source=turo</code>{' '}
-              (matching email-parsed Turo bookings), so guest portals are created automatically
-              for Tesla vehicles. Existing bookings keep their guest key/schedule data intact.
-            </p>
-
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={e => setImportFile(e.target.files?.[0] || null)}
-              className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-gray-700 dark:file:text-gray-200"
-            />
-
-            {importError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 dark:bg-red-900/20">
-                {importError}
-              </div>
-            )}
-
-            {importResult && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 dark:bg-green-900/20 space-y-1">
-                <div>✅ Created: <strong>{importResult.created}</strong></div>
-                <div>🔄 Updated: <strong>{importResult.updated}</strong></div>
-                <div>🔑 Guest keys created: <strong>{importResult.guest_keys_created}</strong></div>
-                {importResult.skipped?.length > 0 && (
-                  <details className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                    <summary className="cursor-pointer">⚠️ {importResult.skipped.length} skipped</summary>
-                    <ul className="list-disc list-inside mt-1">
-                      {importResult.skipped.map((s, i) => <li key={i}>{s}</li>)}
-                    </ul>
-                  </details>
-                )}
-                {importResult.errors?.length > 0 && (
-                  <details className="text-xs text-red-700 dark:text-red-400 mt-1">
-                    <summary className="cursor-pointer">❌ {importResult.errors.length} errors</summary>
-                    <ul className="list-disc list-inside mt-1">
-                      {importResult.errors.map((s, i) => <li key={i}>{s}</li>)}
-                    </ul>
-                  </details>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Close
-              </button>
-              <button
-                disabled={!importFile || importing}
-                onClick={async () => {
-                  if (!importFile) return;
-                  setImporting(true);
-                  setImportError('');
-                  setImportResult(null);
-                  try {
-                    const csvText = await importFile.text();
-                    const r = await api.post('/admin/turo/import-csv', { csv: csvText });
-                    setImportResult(r.data);
-                    refreshBookings();
-                  } catch (e) {
-                    setImportError(e?.response?.data?.error || e.message || 'Import failed');
-                  } finally {
-                    setImporting(false);
-                  }
-                }}
-                className="px-4 py-2 text-sm bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {importing ? 'Importing…' : 'Import'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminLayout>
   );
 }

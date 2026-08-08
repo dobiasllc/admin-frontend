@@ -31,6 +31,8 @@ const NAV_ITEMS = [
   { to: '/map',          label: 'Live Map',     icon: '🗺' },
   { to: '/analytics',    label: 'Analytics',    icon: '📊' },
   { to: '/expenses',     label: 'Expense Tracker', icon: '🧾' },
+  { to: '/tax-rates',    label: 'Tax Rates',    icon: '🧮' },
+  { to: '/delivery-locations', label: 'Delivery Locations', icon: '🚚' },
 
   { to: '/settings',     label: 'Settings',     icon: '⚙️' },
 ];

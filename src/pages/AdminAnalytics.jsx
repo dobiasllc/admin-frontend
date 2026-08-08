@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
+import TuroCsvImportButton from '../components/TuroCsvImportButton';
+
 
 // ── Cost categories for manual entry ─────────────────────────────────────────
 const COST_CATEGORIES = [
@@ -9,7 +11,8 @@ const COST_CATEGORIES = [
   'Overhead', 'Marketing', 'Other',
 ];
 
-const COMPUTED_CATEGORIES = new Set(['Loan Interest', 'Registration', 'TTR', 'Maintenance']);
+const COMPUTED_CATEGORIES = new Set(['Loan Interest', 'Registration', 'TTR', 'Maintenance', 'Depreciation']);
+
 
 const RANGE_OPTIONS = [
   { key: '7d',    label: '1 week' },
@@ -174,7 +177,19 @@ function DepreciationChart({ history }) {
   const xFor = (i) => padL + (n === 1 ? 0 : (i / (n - 1)) * innerW);
   const yFor = (v) => padT + innerH - ((v - minV) / range) * innerH;
 
-  const estPath = history.map((h, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i)} ${yFor(h.estimatedValueCents)}`).join(' ');
+  // Estimated line: draw segments only where consecutive points both exist (gap nulls) —
+  // the estimated series now only exists from "today" forward, so early months are null.
+  const estSegments = [];
+  let estSeg = [];
+  history.forEach((h, i) => {
+    if (h.estimatedValueCents != null) {
+      estSeg.push(`${estSeg.length === 0 ? 'M' : 'L'} ${xFor(i)} ${yFor(h.estimatedValueCents)}`);
+    } else if (estSeg.length) {
+      estSegments.push(estSeg.join(' '));
+      estSeg = [];
+    }
+  });
+  if (estSeg.length) estSegments.push(estSeg.join(' '));
 
   // Actual line: draw segments only where consecutive points both exist (gap nulls)
   const actualSegments = [];
@@ -188,6 +203,7 @@ function DepreciationChart({ history }) {
     }
   });
   if (seg.length) actualSegments.push(seg.join(' '));
+
 
   // X-axis labels: show ~6 evenly spaced months
   const labelStep = Math.max(1, Math.floor(n / 6));
@@ -206,9 +222,12 @@ function DepreciationChart({ history }) {
           <text key={i} x={xFor(i)} y={height - 10} fontSize="9" fill="#9ca3af" textAnchor="middle">{h.month}</text>
         ) : null
       ))}
-      {/* Estimated line (dashed, indigo) */}
-      <path d={estPath} fill="none" stroke="#818cf8" strokeWidth="2" strokeDasharray="5,4" />
+      {/* Estimated line (dashed, indigo), gapped */}
+      {estSegments.map((d, i) => (
+        <path key={i} d={d} fill="none" stroke="#818cf8" strokeWidth="2" strokeDasharray="5,4" />
+      ))}
       {/* Actual line (solid, green), gapped */}
+
       {actualSegments.map((d, i) => (
         <path key={i} d={d} fill="none" stroke="#16a34a" strokeWidth="2.5" />
       ))}
@@ -245,6 +264,15 @@ function MonthlyTrendChart({ trend }) {
     .map((t, i) => (t.utilizationPct != null ? [xFor(i), padT + innerH - (t.utilizationPct / maxUtil) * innerH] : null))
     .filter(Boolean);
   const utilPath = utilPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
+
+  // Profit line (Phase 8.1) — scaled against the same revenue axis (profit is
+  // always <= revenue in magnitude terms for our purposes, so sharing the axis
+  // is a reasonable approximation; negative profit clamps to the bottom).
+  const profitPoints = trend
+    .map((t, i) => (t.profitCents != null ? [xFor(i), padT + innerH - (Math.max(0, Math.min(maxRev, t.profitCents)) / maxRev) * innerH] : null))
+    .filter(Boolean);
+  const profitPath = profitPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
+
 
   // Gridlines at 0/25/50/75/100%
   const gridFracs = [0, 0.25, 0.5, 0.75, 1];
@@ -548,6 +576,10 @@ export default function AdminAnalytics() {
     const monthlyAdd = fleet.avgProfitPerDayCents * 30;
     insights.push(`💰 A new vehicle performing at your fleet's average profit/day (${fmt$(fleet.avgProfitPerDayCents)}/day) would add roughly ${fmt$(monthlyAdd)}/month.`);
   }
+  if (fleet.buyAnotherVehiclePaybackYears != null) {
+    insights.push(`🚙 Should I buy another vehicle? At your fleet's avg purchase price (${fmt$(fleet.avgPurchasePriceCents)}) and avg annual profit/vehicle (${fmt$(fleet.avgAnnualProfitPerVehicleCents)}/yr), payback would take roughly ${fleet.buyAnotherVehiclePaybackYears} year${fleet.buyAnotherVehiclePaybackYears === 1 ? '' : 's'}.`);
+  }
+
   vehicles.forEach(v => {
     if (v.utilizationPct != null && v.utilizationPct < 20) {
       insights.push(`⚠️ ${v.name || v.vin} has low utilization (${v.utilizationPct}%) — consider adjusting pricing, marketing, or retiring it.`);
@@ -658,6 +690,7 @@ export default function AdminAnalytics() {
               <div className="text-xl font-bold text-purple-700">{fmt$(fleet.totalBusinessOverheadCents)}</div>
               <div className="text-xs text-purple-600 mt-1 flex items-center justify-center">Total Business Overhead <InfoTooltip text={FORMULAS.totalOverhead} /></div>
             </div>
+
             <div className={`border rounded-lg p-4 text-center ${fleet.profitCents >= 0 ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20' : 'bg-orange-50 border-orange-200 dark:bg-orange-900/20'}`}>
 
               <div className={`text-xl font-bold ${fleet.profitCents >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>{fmt$(fleet.profitCents)}</div>
@@ -682,12 +715,37 @@ export default function AdminAnalytics() {
             </div>
           )}
 
+          {/* Lifetime / Net-Worth Stats — NOT range-scoped, always purchase-to-date */}
+          <div className="bg-white rounded-lg border border-indigo-200 p-4 mb-8 dark:bg-gray-800 dark:border-indigo-800">
+            <SectionHeader icon="🏦" title="Lifetime Totals & Net Worth"
+              subtitle="These figures are independent of the time range selector above — always purchase-to-date." />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
+                <div className="text-lg font-bold text-green-700">{fmt$(fleet.lifetimeRevenueCents)}</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Lifetime Revenue</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
+                <div className="text-lg font-bold text-red-600">{fmt$(fleet.lifetimeCostCents)}</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Lifetime Costs</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
+                <div className="text-lg font-bold text-blue-700"><ProfitBadge cents={fleet.lifetimeProfitCents} /></div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Lifetime Net Profit</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
+                <div className="text-lg font-bold text-purple-700">{fmt$(fleet.fleetNetWorthCents)}</div>
+                <div className="text-xs text-gray-500 mt-1 dark:text-gray-400">Fleet Net Worth if Liquidated Today</div>
+              </div>
+            </div>
+          </div>
+
           {/* Monthly Trend Chart */}
           <div className="bg-white rounded-lg border border-gray-200 p-4 mb-8 dark:bg-gray-800 dark:border-gray-700">
-            <SectionHeader icon="📈" title="Monthly Revenue & Utilization Trend"
+            <SectionHeader icon="📈" title="Monthly Revenue, Cost & Utilization Trend"
               subtitle={`Bucketed by calendar month within the selected range (${rangeLabel}). Hover over bars/points for exact values.`} />
             <MonthlyTrendChart trend={fleet.monthlyTrend} />
           </div>
+
 
           {/* Customer & Demand Insights (folded into Overview) */}
           <div className="bg-white rounded-lg border border-gray-200 p-4 mb-8 dark:bg-gray-800 dark:border-gray-700">
@@ -795,6 +853,7 @@ export default function AdminAnalytics() {
                 subtitle="Revenue per unit (RPU), revenue per billed day, average rental length. Click column headers to sort." />
               <div className="flex items-center gap-3 flex-wrap">
                 {FilterBox}
+                <TuroCsvImportButton onImported={() => loadAnalytics(range)} />
                 <button
                   onClick={exportFinancialCsv}
                   className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
@@ -1117,11 +1176,15 @@ export default function AdminAnalytics() {
           </div>
           <DepreciationChart history={depVehicle?.depreciationHistory} />
           <p className="text-xs text-gray-400 mt-2 dark:text-gray-500">
-            Estimated curve is interpolated from OTDcheck's 1/3/5-year depreciation projections at purchase.
-            Actual values are recorded monthly starting the month this feature was deployed — earlier months will
-            show a gap in the actual line until enough history accumulates. This chart always shows full
-            purchase-to-date history and is not affected by the global time range selector above.
+            The <strong>Actual</strong> (green) line shows the real historical decline from the purchase price,
+            recorded monthly starting the month this feature was deployed — earlier months will show a gap until
+            enough history accumulates. The <strong>Estimated</strong> (indigo, dashed) line projects OTDcheck's
+            1/3/5-year depreciation forecast forward from <strong>today's</strong> market value — it does not
+            extend into the past, since OTDcheck's projections are relative to when they were queried, not to the
+            vehicle's purchase date. This chart always shows full purchase-to-date history and is not affected by
+            the global time range selector above.
           </p>
+
         </div>
       )}
 

@@ -6,10 +6,14 @@
  * Changes:
  *  1. Mark-signed now requires an uploaded doc OR a SignWell send first.
  *  2. "Mark as Paid" panel for non-Stripe, non-Turo bookings.
- *  3. "Adjust Booking Times" moved to booking level (works for all vehicles).
+ *  3. Unified "Change Trip Dates" flow (replaces old Shorten/Extend buttons) —
+ *     posts to /admin/bookings/{id}/change-trip, gated on payment + signature.
  *  4. Contract panel hidden for Turo bookings.
  *  5. Check-in / deposit actions hidden for Turo bookings.
+ *  6. PendingTripChangePanel / PendingChangeRequestBanner / ChangeHistoryPanel
+ *     added for the Trip Change Overhaul (Session 5).
  */
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useApi } from "../context/AuthContext";
@@ -617,9 +621,40 @@ function ContractPanel({ booking, onRefresh }) {
           )}
         </div>
       )}
+
+      {/* ── Contract Version History (contracts[] archive) ── */}
+      {Array.isArray(booking.contracts) && booking.contracts.length > 0 && (
+        <div className="border-t border-gray-100 pt-4 mt-4 dark:border-gray-700">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 dark:text-gray-500">
+            Contract Version History
+          </p>
+          <div className="space-y-1.5">
+            {[...booking.contracts].reverse().map((c, idx) => (
+              <div key={c.id || idx} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2 dark:bg-gray-900/40">
+                <div>
+                  <span className="font-medium text-gray-700 capitalize dark:text-gray-300">
+                    {c.type === "trip_change" ? "📅 Trip Change" : "Original"}
+                  </span>
+                  <span className="ml-2 text-gray-400 dark:text-gray-500">
+                    [{(CONTRACT_STATUS_LABELS[c.status] || { label: c.status }).label}]
+                  </span>
+                </div>
+                <div className="text-gray-400 dark:text-gray-500">
+                  {c.signedAt
+                    ? `Signed ${new Date(c.signedAt).toLocaleString()}`
+                    : c.sentAt
+                    ? `Sent ${new Date(c.sentAt).toLocaleString()}`
+                    : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ── Helpers for datetime-local inputs ────────────────────────────────────────
 
@@ -1040,6 +1075,359 @@ function ReadinessBanner({ booking }) {
   );
 }
 
+// ── Pending Settlement Banner ──────────────────────────────────────────────────
+// Shown when a shortened trip resulted in a manual (non-Stripe) refund owed to
+// the guest that still needs to be settled off-platform.
+function PendingSettlementBanner({ booking, onRefresh }) {
+  const api = useApi();
+  const [settling, setSettling] = useState(false);
+  const [err, setErr] = useState("");
+
+  const pendingCents = booking.pendingAdjustmentCents;
+  if (!pendingCents) return null;
+
+  const isRefundOwed = pendingCents < 0;
+  const amount = formatCents(Math.abs(pendingCents));
+
+  const handleSettle = async () => {
+    if (!window.confirm(`Confirm that ${amount} has been ${isRefundOwed ? "refunded to" : "collected from"} the guest?`)) return;
+    setSettling(true); setErr("");
+    try {
+      await api.post(`/admin/bookings/${booking.bookingId}/settle-adjustment`);
+      onRefresh();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed to mark settled");
+    } finally {
+      setSettling(false);
+    }
+  };
+
+  return (
+    <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+      <div className="flex items-start gap-3">
+        <span className="text-amber-500 text-lg mt-0.5">💵</span>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-amber-800">
+            Manual {isRefundOwed ? "refund" : "charge"} pending: {amount}
+          </p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            {booking.pendingAdjustmentReason || "This booking's trip dates were adjusted and the amount above needs to be settled with the guest off-platform (cash/Zelle/Venmo/etc.)."}
+          </p>
+          {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
+          <button
+            onClick={handleSettle}
+            disabled={settling}
+            className="mt-2 px-3 py-1.5 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50 transition"
+          >
+            {settling ? "Saving…" : "✓ Mark Settled"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Pending Trip Change Panel ────────────────────────────────────────────────
+// Shown when a change-trip request is awaiting payment and/or contract re-signature.
+function PendingTripChangePanel({ booking, onRefresh }) {
+  const api = useApi();
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const pc = booking.pendingTripChange;
+  if (!pc) return null;
+
+  const paid   = pc.paymentStatus === "paid";
+  const signed = pc.contractStatus === "signed";
+  const directionLabel = pc.direction === "extend" ? "Extension" : pc.direction === "shorten" ? "Shortening" : "Change";
+  const directionIcon  = pc.direction === "extend" ? "➕" : pc.direction === "shorten" ? "✂" : "📅";
+
+  const doAction = async (action) => {
+    setLoading(true); setErr("");
+    try {
+      await api.post(`/admin/bookings/${booking.bookingId}/${action}`);
+      onRefresh();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || `${action} failed`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!window.confirm("Cancel this pending trip change? The booking's dates will remain unchanged.")) return;
+    await doAction("cancel-change");
+  };
+
+  const handleCopy = () => {
+    if (!pc.stripeCheckoutUrl) return;
+    navigator.clipboard.writeText(pc.stripeCheckoutUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  return (
+    <div className="bg-blue-50 border border-blue-300 rounded-xl p-5 space-y-3 dark:bg-blue-900/20">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-blue-800">{directionIcon} Pending Trip {directionLabel}</p>
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+          {pc.deltaCents > 0 ? `+${formatCents(pc.deltaCents)}` : pc.deltaCents < 0 ? `-${formatCents(Math.abs(pc.deltaCents))}` : "No change in price"}
+        </span>
+      </div>
+
+      {err && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{err}</div>}
+
+      <dl className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <dt className="text-gray-400 text-xs dark:text-gray-500">New Start Time</dt>
+          <dd className="font-medium">{pc.newStartTime ? new Date(pc.newStartTime).toLocaleString() : "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-gray-400 text-xs dark:text-gray-500">New End Time</dt>
+          <dd className="font-medium">{pc.newEndTime ? new Date(pc.newEndTime).toLocaleString() : "—"}</dd>
+        </div>
+      </dl>
+
+      <div className="flex gap-4 text-xs">
+        <span className={paid ? "text-green-700 font-medium" : "text-amber-700"}>
+          {paid ? "✓ Paid" : "⏳ Awaiting Payment"}
+        </span>
+        <span className={signed ? "text-green-700 font-medium" : "text-amber-700"}>
+          {signed ? "✓ Contract Signed" : "⏳ Awaiting Signature"}
+        </span>
+      </div>
+      <p className="text-xs text-blue-700">
+        The change will finalize automatically once both payment and signature are confirmed.
+      </p>
+      {pc.note && <p className="text-xs text-blue-700 italic">Note: {pc.note}</p>}
+
+      {pc.stripeCheckoutUrl && !paid && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            readOnly
+            value={pc.stripeCheckoutUrl}
+            className="flex-1 border border-blue-200 rounded-lg px-3 py-1.5 text-xs font-mono bg-white text-gray-700 truncate dark:bg-gray-900/40 dark:text-gray-300"
+          />
+          <button
+            onClick={handleCopy}
+            className="px-3 py-1.5 border border-blue-300 text-blue-700 text-xs rounded-lg hover:bg-blue-100 transition whitespace-nowrap"
+          >
+            {copied ? "✓ Copied!" : "Copy"}
+          </button>
+          <a
+            href={pc.stripeCheckoutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition whitespace-nowrap"
+          >
+            Open ↗
+          </a>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {!paid && (
+          <button
+            onClick={() => {
+              if (window.confirm("Mark this change as paid in person? Use this if the guest paid via cash/Zelle/Venmo/etc. instead of the Stripe link.")) {
+                doAction("mark-change-paid");
+              }
+            }}
+            disabled={loading}
+            className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            {loading ? "Working…" : "✓ Mark Paid In Person"}
+          </button>
+        )}
+        {!signed && (
+          <button
+            onClick={() => {
+              if (window.confirm("Mark the change contract as signed in person?")) {
+                doAction("mark-change-signed");
+              }
+            }}
+            disabled={loading}
+            className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            {loading ? "Working…" : "✓ Mark Signed In Person"}
+          </button>
+        )}
+        <button
+          onClick={handleCancel}
+          disabled={loading}
+          className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600 transition"
+        >
+          Cancel Change
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Pending Guest Change Request Banner ──────────────────────────────────────
+// Shown when a renter has self-service-requested a date change awaiting admin review.
+function PendingChangeRequestBanner({ booking, onRefresh }) {
+  const api = useApi();
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [showDeny, setShowDeny] = useState(false);
+  const [denyReason, setDenyReason] = useState("");
+
+  const cr = booking.pendingChangeRequest;
+  if (!cr) return null;
+
+  const handleApprove = async () => {
+    if (!window.confirm("Approve this guest's requested date change? This will recompute pricing, and if a change is owed, create a payment link/refund and send a new contract.")) return;
+    setLoading(true); setErr("");
+    try {
+      await api.post(`/admin/bookings/${booking.bookingId}/approve-change-request`);
+      onRefresh();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed to approve change request");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeny = async () => {
+    setLoading(true); setErr("");
+    try {
+      await api.post(`/admin/bookings/${booking.bookingId}/deny-change-request`, {
+        reason: denyReason || undefined,
+      });
+      setShowDeny(false);
+      onRefresh();
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || "Failed to deny change request");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-purple-50 border border-purple-300 rounded-xl p-5 space-y-3 dark:bg-purple-900/20">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-purple-800">🙋 Pending Guest Change Request</p>
+      </div>
+
+      {err && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{err}</div>}
+
+      <dl className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <dt className="text-gray-400 text-xs dark:text-gray-500">Requested New Start</dt>
+          <dd className="font-medium">{cr.newStartTime ? new Date(cr.newStartTime).toLocaleString() : "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-gray-400 text-xs dark:text-gray-500">Requested New End</dt>
+          <dd className="font-medium">{cr.newEndTime ? new Date(cr.newEndTime).toLocaleString() : "—"}</dd>
+        </div>
+      </dl>
+      {cr.reason && (
+        <p className="text-xs text-purple-700 italic">"{cr.reason}"</p>
+      )}
+      <p className="text-xs text-purple-600">
+        Requested {cr.requestedAt ? new Date(cr.requestedAt).toLocaleString() : ""}
+      </p>
+
+      {!showDeny ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={handleApprove}
+            disabled={loading}
+            className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            {loading ? "Working…" : "✓ Approve"}
+          </button>
+          <button
+            onClick={() => setShowDeny(true)}
+            disabled={loading}
+            className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
+          >
+            ✕ Deny
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 pt-1">
+          <input
+            type="text"
+            value={denyReason}
+            onChange={e => setDenyReason(e.target.value)}
+            placeholder="Reason for denial (optional)"
+            className="w-full border border-purple-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleDeny}
+              disabled={loading}
+              className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
+            >
+              {loading ? "Working…" : "Confirm Deny"}
+            </button>
+            <button
+              onClick={() => { setShowDeny(false); setDenyReason(""); }}
+              className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Change History Panel ─────────────────────────────────────────────────────
+// Audit trail of all past trip changes (from `changeHistory[]`).
+function ChangeHistoryPanel({ booking }) {
+  const history = booking.changeHistory || [];
+  if (!history.length) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">
+        Trip Change History
+      </h2>
+      <div className="space-y-3">
+        {[...history].reverse().map((h, idx) => (
+          <div key={idx} className="border border-gray-100 rounded-lg p-3 text-sm dark:border-gray-700">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-medium capitalize">
+                {h.type === "extend" ? "➕ Extended" : h.type === "shorten" ? "✂ Shortened" : "📅 Changed"}
+              </span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {h.appliedAt ? new Date(h.appliedAt).toLocaleString() : ""}
+              </span>
+            </div>
+            <dl className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <div>
+                <dt className="text-gray-400 dark:text-gray-500">Old Dates</dt>
+                <dd>{h.oldStart ? new Date(h.oldStart).toLocaleDateString() : "—"} → {h.oldEnd ? new Date(h.oldEnd).toLocaleDateString() : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-400 dark:text-gray-500">New Dates</dt>
+                <dd>{h.newStart ? new Date(h.newStart).toLocaleDateString() : "—"} → {h.newEnd ? new Date(h.newEnd).toLocaleDateString() : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-400 dark:text-gray-500">Price Delta</dt>
+                <dd className={h.deltaCents > 0 ? "text-red-600" : h.deltaCents < 0 ? "text-green-600" : ""}>
+                  {h.deltaCents > 0 ? `+${formatCents(h.deltaCents)}` : h.deltaCents < 0 ? `-${formatCents(Math.abs(h.deltaCents))}` : "$0.00"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-400 dark:text-gray-500">Requested By</dt>
+                <dd>{h.requestedBy || "—"}</dd>
+              </div>
+            </dl>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function AdminBookingDetail() {
   const { id } = useParams();
@@ -1052,13 +1440,16 @@ export default function AdminBookingDetail() {
   const [actionMsg, setActionMsg]     = useState("");
   const [actionErr, setActionErr]     = useState("");
 
-  // Adjust booking times (inline in Rental Info card)
-  const [showAdjust,  setShowAdjust]  = useState(false);
+  // Change Trip Dates modal (inline in Rental Info card)
+  // adjMode: null | "change"
+  const [adjMode,     setAdjMode]     = useState(null);
   const [adjStart,    setAdjStart]    = useState("");
   const [adjEnd,      setAdjEnd]      = useState("");
+  const [adjNote,     setAdjNote]     = useState("");
   const [adjLoading,  setAdjLoading]  = useState(false);
   const [adjMsg,      setAdjMsg]      = useState("");
   const [adjErr,      setAdjErr]      = useState("");
+
 
   // E1/E3: Edit Booking panel state
   const [showEdit,      setShowEdit]      = useState(false);
@@ -1131,6 +1522,35 @@ export default function AdminBookingDetail() {
   // - everything else (admin/private manual): MarkPaidPanel
   const showStripePanel = !isTuro && booking.paymentMethod === "stripe_payment_link";
   const showMarkPaidPanel = !isTuro && booking.paymentMethod !== "stripe_payment_link";
+  const hasPendingTripChange = !!booking.pendingTripChange;
+  const hasPendingChangeRequest = !!booking.pendingChangeRequest;
+
+  const openChangeTrip = () => {
+    setAdjStart(toDatetimeLocal(booking.startTime));
+    setAdjEnd(toDatetimeLocal(booking.endTime));
+    setAdjErr(""); setAdjMsg(""); setAdjNote("");
+    setAdjMode("change");
+  };
+
+  const submitChangeTrip = async () => {
+    if (!adjStart || !adjEnd) { setAdjErr("Both start and end times are required."); return; }
+    setAdjLoading(true); setAdjErr(""); setAdjMsg("");
+    try {
+      const res = await api.post(`/admin/bookings/${booking.bookingId}/change-trip`, {
+        new_start_time: fromDatetimeLocal(adjStart),
+        new_end_time:   fromDatetimeLocal(adjEnd),
+        note: adjNote || undefined,
+      });
+      setAdjMsg(res.data?.message || "✓ Trip change requested. See Pending Trip Change panel below.");
+      setAdjMode(null);
+      reload();
+    } catch (e) {
+      setAdjErr(e.response?.data?.error || e.message || "Failed to request trip change");
+    } finally {
+      setAdjLoading(false);
+    }
+  };
+
 
   return (
     <AdminLayout>
@@ -1165,6 +1585,12 @@ export default function AdminBookingDetail() {
         {/* Issue 2: Booking readiness banner for non-Turo bookings */}
         <ReadinessBanner booking={booking} />
 
+        {/* Pending settlement / trip change / guest request banners */}
+        <PendingSettlementBanner booking={booking} onRefresh={reload} />
+        {hasPendingChangeRequest && <PendingChangeRequestBanner booking={booking} onRefresh={reload} />}
+        {hasPendingTripChange && <PendingTripChangePanel booking={booking} onRefresh={reload} />}
+
+
         {actionMsg && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 dark:bg-green-900/20">{actionMsg}</div>
         )}
@@ -1172,23 +1598,21 @@ export default function AdminBookingDetail() {
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 dark:bg-red-900/20">{actionErr}</div>
         )}
 
-        {/* Booking info — with inline Adjust Times */}
+        {/* Booking info — with inline Shorten/Extend Trip */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Rental Info</h2>
-            {!showAdjust && (
-              <button
-                onClick={() => {
-                  setAdjStart(toDatetimeLocal(booking.startTime));
-                  setAdjEnd(toDatetimeLocal(booking.endTime));
-                  setAdjErr(""); setAdjMsg("");
-                  setShowAdjust(true);
-                }}
-                className="px-3 py-1.5 bg-yellow-500 text-white text-xs font-medium rounded-lg hover:bg-yellow-600 transition"
-              >
-                ⏰ Adjust Times
-              </button>
+            {!adjMode && !hasPendingTripChange && !hasPendingChangeRequest && (
+              <div className="flex gap-2">
+                <button
+                  onClick={openChangeTrip}
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition"
+                >
+                  📅 Change Trip Dates
+                </button>
+              </div>
             )}
+
           </div>
 
           <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -1256,9 +1680,15 @@ export default function AdminBookingDetail() {
             )}
           </dl>
 
-          {/* Inline adjust-times form */}
-          {showAdjust && (
+          {/* Unified Change Trip Dates form */}
+          {adjMode === "change" && (
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 dark:border-gray-700">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Changing the trip dates recomputes pricing for the new range. If more is owed, a Stripe
+                payment link is generated (or flagged for manual settlement); if less is owed, a refund is
+                issued automatically. A new contract will be sent for signature. The change takes effect once
+                both payment and signature are confirmed — see the Pending Trip Change panel above.
+              </p>
               {adjMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700 dark:bg-green-900/20">{adjMsg}</div>}
               {adjErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{adjErr}</div>}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1268,7 +1698,7 @@ export default function AdminBookingDetail() {
                     type="datetime-local"
                     value={adjStart}
                     onChange={e => setAdjStart(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:border-gray-600"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600"
                   />
                 </div>
                 <div>
@@ -1277,36 +1707,30 @@ export default function AdminBookingDetail() {
                     type="datetime-local"
                     value={adjEnd}
                     onChange={e => setAdjEnd(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:border-gray-600"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600"
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Note (optional)</label>
+                <input
+                  type="text"
+                  value={adjNote}
+                  onChange={e => setAdjNote(e.target.value)}
+                  placeholder="Internal note about why this change is being made…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600"
+                />
+              </div>
               <div className="flex gap-2">
                 <button
-                  onClick={async () => {
-                    if (!adjStart || !adjEnd) { setAdjErr("Both times are required."); return; }
-                    setAdjLoading(true); setAdjErr(""); setAdjMsg("");
-                    try {
-                      await api.put(`/admin/guest-keys/${booking.bookingId}/reschedule`, {
-                        start_time: fromDatetimeLocal(adjStart),
-                        end_time:   fromDatetimeLocal(adjEnd),
-                      });
-                      setAdjMsg("✓ Times updated.");
-                      setShowAdjust(false);
-                      reload();
-                    } catch (e) {
-                      setAdjErr(e.response?.data?.error || e.message || "Failed to update times");
-                    } finally {
-                      setAdjLoading(false);
-                    }
-                  }}
+                  onClick={submitChangeTrip}
                   disabled={adjLoading}
-                  className="px-3 py-1.5 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {adjLoading ? "Saving…" : "Apply"}
+                  {adjLoading ? "Saving…" : "Request Change"}
                 </button>
                 <button
-                  onClick={() => { setShowAdjust(false); setAdjErr(""); }}
+                  onClick={() => { setAdjMode(null); setAdjErr(""); }}
                   className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
                 >
                   Cancel
@@ -1315,6 +1739,7 @@ export default function AdminBookingDetail() {
             </div>
           )}
         </div>
+
 
         {/* E1/E3: Edit Booking Panel */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
@@ -1491,12 +1916,15 @@ export default function AdminBookingDetail() {
           <ContractPanel booking={booking} onRefresh={reload} />
         )}
 
+
+        {/* Trip change audit history */}
+        <ChangeHistoryPanel booking={booking} />
+
         {/* Guest Mode Panel */}
         <GuestKeyPanel booking={booking} onRefresh={reload} />
 
         {/* Guest Key (Driver Invite) Panel */}
         <DriverKeyPanel booking={booking} onRefresh={reload} />
-
 
         {/* Inspections */}
         {(preTrip || postTrip) && (

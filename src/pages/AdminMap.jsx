@@ -12,6 +12,7 @@
  *  - Dead-reckoning: smooth position interpolation between 10-second telemetry polls
  */
 import { useState, useEffect, useCallback, useRef, Component } from 'react';
+import { Link } from 'react-router-dom';
 import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
 import {
@@ -160,7 +161,7 @@ function extrapolatePosition(lat, lon, headingDeg, speedMph, elapsedMs) {
 }
 
 // ── Vehicle Card ───────────────────────────────────────────────────────────
-function VehicleCard({ v, telemetry, displayPositions, selectedVin, onSingleClick, onDoubleClick }) {
+function VehicleCard({ v, telemetry, displayPositions, selectedVin, onSingleClick, onDoubleClick, activeBookings }) {
   const tel      = telemetry[v.vin];
   // "Live" = recent telemetry AND speed > threshold (not GPS noise)
   const moving   = isVehicleMoving(tel);
@@ -237,6 +238,15 @@ function VehicleCard({ v, telemetry, displayPositions, selectedVin, onSingleClic
           </p>
           {/* Only show speed if above noise threshold */}
           {speed > MOVING_SPEED_THRESHOLD_MPH && <p>🚗 {speed.toFixed(0)} mph</p>}
+          {moving && activeBookings?.[v.vin] && (
+            <Link
+              to={`/bookings/${activeBookings[v.vin]}`}
+              onClick={(e) => e.stopPropagation()}
+              className="block text-blue-600 hover:underline mt-0.5"
+            >
+              View active trip →
+            </Link>
+          )}
         </div>
       ) : (
         <p className="mt-1 text-xs text-gray-400 italic">No telemetry</p>
@@ -263,6 +273,8 @@ export default function AdminMap() {
   const [loading, setLoading]                 = useState(true);
   const [err, setErr]                         = useState('');
   const [lastUpdated, setLastUpdated]         = useState(null);
+  // activeBookings: { [vin]: bookingId } — the vehicle's current active/confirmed booking
+  const [activeBookings, setActiveBookings]   = useState({});
 
   const vehiclesRef  = useRef([]);
   const telemetryRef = useRef({});
@@ -274,6 +286,20 @@ export default function AdminMap() {
       .then(r => ({ vin, data: r.data || null }))
       .catch(() => ({ vin, data: null })),
   [api]);
+
+  // Fetch each vehicle's current active/confirmed booking (for "view active trip" links)
+  const refreshActiveBookings = useCallback(() => {
+    api.get('/admin/dashboard')
+      .then(r => {
+        const vehicles = r.data?.vehicles || [];
+        const map = {};
+        vehicles.forEach(v => {
+          if (v.vin && v.currentBookingId) map[v.vin] = v.currentBookingId;
+        });
+        setActiveBookings(map);
+      })
+      .catch(() => {});
+  }, [api]);
 
   // Poll all vehicles and merge results into telemetry state
   const refreshTelemetry = useCallback(() => {
@@ -331,10 +357,12 @@ export default function AdminMap() {
       .catch(e => setErr(`Failed to load vehicles: ${e.response?.status} — ${e.response?.data?.error || e.message}`))
       .finally(() => setLoading(false));
 
+    refreshActiveBookings();
+
     // Poll every 10 s for updated positions
     const pollInterval = setInterval(refreshTelemetry, 10000);
     return () => clearInterval(pollInterval);
-  }, [api, fetchLatestTelemetry, refreshTelemetry]);
+  }, [api, fetchLatestTelemetry, refreshTelemetry, refreshActiveBookings]);
 
   // ── Dead-reckoning animation ─────────────────────────────────────────────
   // Every 100ms, advance each moving vehicle's display position based on
@@ -433,7 +461,7 @@ export default function AdminMap() {
               </span>
             )}
             <button
-              onClick={refreshTelemetry}
+              onClick={() => { refreshTelemetry(); refreshActiveBookings(); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50 shadow-sm dark:hover:bg-gray-700 dark:bg-gray-800 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -458,7 +486,7 @@ export default function AdminMap() {
             {vehicles.map(v => (
               <VehicleCard key={v.vin} v={v}
                 telemetry={telemetry} displayPositions={displayPositions}
-                selectedVin={selectedVin}
+                selectedVin={selectedVin} activeBookings={activeBookings}
                 onSingleClick={loadTrips} onDoubleClick={panToVehicle} />
             ))}
           </div>
@@ -508,6 +536,11 @@ export default function AdminMap() {
                             {tel.odometerMiles != null && <>📍 {Number(tel.odometerMiles).toLocaleString(undefined, { maximumFractionDigits: 0 })} mi odometer<br /></>}
                             {tel.locked != null && <>{tel.locked ? '🔒 Locked' : '🔓 Unlocked'}<br /></>}
                             {tel.chargingState && tel.chargingState !== 'Disconnected' && tel.chargingState !== 'NoPower' && <>🔌 {tel.chargingState}<br /></>}
+                            {activeBookings[v.vin] && (
+                              <Link to={`/bookings/${activeBookings[v.vin]}`} className="text-blue-600 hover:underline">
+                                View active trip →
+                              </Link>
+                            )}
                           </Popup>
                         </Marker>
                       );
@@ -597,10 +630,10 @@ export default function AdminMap() {
                 ? <p className="text-gray-400 text-sm dark:text-gray-500">No Tesla vehicles found.</p>
                 : (
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-                    {vehicles.map(v => (
+                        {vehicles.map(v => (
                       <VehicleCard key={v.vin} v={v}
                         telemetry={telemetry} displayPositions={displayPositions}
-                        selectedVin={selectedVin}
+                        selectedVin={selectedVin} activeBookings={activeBookings}
                         onSingleClick={loadTrips} onDoubleClick={panToVehicle} />
                     ))}
                   </div>

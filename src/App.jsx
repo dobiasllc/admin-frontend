@@ -8,8 +8,11 @@ import AdminBookings from './pages/AdminBookings';
 import AdminBookingDetail from './pages/AdminBookingDetail';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminUsers from './pages/AdminUsers';
+import AdminUserDetail from './pages/AdminUserDetail';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminExpenses from './pages/AdminExpenses';
+import AdminTaxRates from './pages/AdminTaxRates';
+import AdminDeliveryLocations from './pages/AdminDeliveryLocations';
 
 import AdminTuroGuests from './pages/AdminTuroGuests';
 // (AdminTaxes removed — replaced by AdminExpenses; /taxes now redirects to /expenses)
@@ -58,6 +61,12 @@ function App() {
         <Route path="/users"
           element={<AdminRoute><AdminUsers /></AdminRoute>}
         />
+        <Route path="/users/:id"
+          element={<AdminRoute><AdminUserDetail /></AdminRoute>}
+        />
+        <Route path="/users/:id/verification"
+          element={<AdminRoute><AdminUserDetail /></AdminRoute>}
+        />
         <Route path="/vehicles"
           element={<AdminRoute><AdminVehicles /></AdminRoute>}
         />
@@ -87,6 +96,12 @@ function App() {
           element={<AdminRoute><AdminExpenses /></AdminRoute>}
         />
         <Route path="/taxes" element={<Navigate to="/expenses" replace />} />
+        <Route path="/tax-rates"
+          element={<AdminRoute><AdminTaxRates /></AdminRoute>}
+        />
+        <Route path="/delivery-locations"
+          element={<AdminRoute><AdminDeliveryLocations /></AdminRoute>}
+        />
 
         <Route path="/turo-guests"
           element={<AdminRoute><AdminTuroGuests /></AdminRoute>}

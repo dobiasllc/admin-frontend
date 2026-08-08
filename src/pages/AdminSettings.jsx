@@ -46,6 +46,12 @@ export default function AdminSettings() {
   const [tzMessage, setTzMessage]         = useState('');
   const [tzError, setTzError]             = useState('');
 
+  const [salesTaxPct, setSalesTaxPct]     = useState('8.25');
+  const [taxLoading, setTaxLoading]       = useState(true);
+  const [taxSaving, setTaxSaving]         = useState(false);
+  const [taxMessage, setTaxMessage]       = useState('');
+  const [taxError, setTaxError]           = useState('');
+
   useEffect(() => {
     api.get('/users/me')
       .then(r => setProfile(r.data))
@@ -53,9 +59,22 @@ export default function AdminSettings() {
       .finally(() => setLoading(false));
 
     api.get('/admin/settings')
-      .then(r => setTimezone(r.data?.timezone || 'America/Chicago'))
-      .catch(e => setTzError(`Failed to load settings: ${e.response?.data?.error || e.message}`))
-      .finally(() => setTzLoading(false));
+      .then(r => {
+        setTimezone(r.data?.timezone || 'America/Chicago');
+        setSalesTaxPct(
+          r.data?.salesTaxPct !== undefined && r.data?.salesTaxPct !== null
+            ? String(r.data.salesTaxPct)
+            : '8.25'
+        );
+      })
+      .catch(e => {
+        setTzError(`Failed to load settings: ${e.response?.data?.error || e.message}`);
+        setTaxError(`Failed to load settings: ${e.response?.data?.error || e.message}`);
+      })
+      .finally(() => {
+        setTzLoading(false);
+        setTaxLoading(false);
+      });
   }, []);
 
   const handleSaveTimezone = () => {
@@ -67,6 +86,23 @@ export default function AdminSettings() {
       .catch(e => setTzError(`Failed to save timezone: ${e.response?.data?.error || e.message}`))
       .finally(() => setTzSaving(false));
   };
+
+  const handleSaveSalesTax = () => {
+    setTaxSaving(true);
+    setTaxMessage('');
+    setTaxError('');
+    const parsed = parseFloat(salesTaxPct);
+    if (isNaN(parsed) || parsed < 0) {
+      setTaxError('Sales tax rate must be a non-negative number');
+      setTaxSaving(false);
+      return;
+    }
+    api.put('/admin/settings', { salesTaxPct: parsed })
+      .then(r => setTaxMessage(r.data?.message || 'Sales tax rate updated'))
+      .catch(e => setTaxError(`Failed to save sales tax rate: ${e.response?.data?.error || e.message}`))
+      .finally(() => setTaxSaving(false));
+  };
+
 
 
   const handleConnectTesla = () => {
@@ -147,7 +183,61 @@ export default function AdminSettings() {
               </div>
             </div>
 
+            {/* ── Tax Fallback & Defaults ── */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Fallback &amp; Defaults</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                <strong className="text-gray-600 dark:text-gray-300">Sales tax fallback rate</strong> — bookings now
+                resolve sales tax automatically from Wisconsin county rates based on the delivery/pickup zip code
+                (see <span className="font-mono">Tax Rates</span> in the nav). This flat rate is only used as a
+                <strong> fallback</strong> when a zip code can't be resolved to a WI county (e.g. malformed or
+                missing zip) — it is no longer the primary tax source for bookings.
+              </p>
+
+              {taxError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-3">{taxError}</div>
+              )}
+              {taxMessage && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 mb-3">{taxMessage}</div>
+              )}
+
+              {taxLoading ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <div className="flex-1 relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={salesTaxPct}
+                      onChange={(e) => setSalesTaxPct(e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                  </div>
+                  <button
+                    onClick={handleSaveSalesTax}
+                    disabled={taxSaving}
+                    className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:opacity-50"
+                  >
+                    {taxSaving ? 'Saving…' : 'Save Fallback Rate'}
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400">
+                <p>
+                  <strong className="text-gray-600 dark:text-gray-300">Primary tax source:</strong> Manage the actual
+                  per-county WI tax rates used for real bookings on the <strong>Tax Rates</strong> admin page, not here.
+                </p>
+              </div>
+            </div>
+
             {/* ── Appearance ── */}
+
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Appearance</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
