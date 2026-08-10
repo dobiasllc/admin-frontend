@@ -107,7 +107,7 @@ function BookingTooltip({ booking, vehicleName }) {
   const guest       = booking.guestName || booking.turoGuestName || booking.userId || '—';
   const phone       = booking.guestPhone || '';
   const location    = booking.pickupLocation || '';
-  const tripUrl     = booking.turoTripUrl || (booking.source === 'turo' && booking.turoTripId ? `https://turo.com/reservation/${booking.turoTripId}` : '');
+  const tripUrl     = booking.turoTripUrl || ((booking.source === 'turo' || booking.source === 'turo_csv_import') && booking.turoTripId ? `https://turo.com/reservation/${booking.turoTripId}` : '');
   const start = new Date(booking.startTime).toLocaleDateString();
   const end   = new Date(booking.endTime).toLocaleDateString();
   return (
@@ -127,7 +127,7 @@ function BookingTooltip({ booking, vehicleName }) {
       )}
       <div className="flex items-center justify-between mt-1.5">
         <span className="capitalize text-gray-400 dark:text-gray-500">{booking.status}</span>
-        {booking.source === 'turo' && (
+        {(booking.source === 'turo' || booking.source === 'turo_csv_import') && (
           <span className="bg-orange-500 text-white px-1.5 py-0.5 rounded text-xs">Turo</span>
         )}
       </div>
@@ -140,7 +140,7 @@ function BookingTooltip({ booking, vehicleName }) {
 
 function BookingBar({ booking, bar, vehicleName, navigate }) {
   const [hovered, setHovered] = useState(false);
-  const isTuro = booking.source === 'turo';
+  const isTuro = booking.source === 'turo' || booking.source === 'turo_csv_import';
   const isBlock = booking._isBlock;
   const bg  = isBlock ? BLOCK_BG  : isTuro ? TURO_BG  : (STATUS_BG[booking.status]    || 'bg-gray-400');
   const hov = isBlock ? BLOCK_HOVER : isTuro ? TURO_HOVER : (STATUS_HOVER[booking.status] || 'hover:bg-gray-500');

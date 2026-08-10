@@ -1037,7 +1037,7 @@ function DriverKeyPanel({ booking, onRefresh }) {
 function ReadinessBanner({ booking }) {
   const source = booking.source || "private";
   // Only show for non-Turo bookings
-  if (source === "turo") return null;
+  if (source === "turo" || source === "turo_csv_import") return null;
   // Only show for active/confirmed bookings
   if (!["confirmed", "active"].includes(booking.status)) return null;
 
@@ -1514,7 +1514,7 @@ export default function AdminBookingDetail() {
 
   const preTrip  = inspections.find(i => i.type === "pre_trip");
   const postTrip = inspections.find(i => i.type === "post_trip");
-  const isTuro   = booking.source === "turo";
+  const isTuro   = booking.source === "turo" || booking.source === "turo_csv_import";
 
   // Determine which payment panel to show
   // - Turo: no payment panel
@@ -1635,7 +1635,7 @@ export default function AdminBookingDetail() {
             <div><dt className="text-gray-400 dark:text-gray-500">Deposit</dt><dd>{formatCents(booking.depositAmountCents)}</dd></div>
             <div><dt className="text-gray-400 dark:text-gray-500">Source</dt><dd className="capitalize">{booking.source || "private"}</dd></div>
             <div><dt className="text-gray-400 dark:text-gray-500">Contract</dt><dd className="capitalize">{booking.contractStatus || "—"}</dd></div>
-            {booking.source === "turo" && (booking.turoTripId || booking.turoTripUrl) && (
+            {isTuro && (booking.turoTripId || booking.turoTripUrl) && (
               <div className="col-span-2">
                 <dt className="text-gray-400 dark:text-gray-500">Turo Reservation</dt>
                 <dd className="flex items-center gap-2 mt-0.5">

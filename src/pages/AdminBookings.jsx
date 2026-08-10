@@ -172,10 +172,11 @@ export default function AdminBookings() {
           </span>
         </td>
         <td className="px-4 py-3">
-          {b.source === 'turo'
+          {(b.source === 'turo' || b.source === 'turo_csv_import')
             ? <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">Turo</span>
             : <span className="capitalize text-gray-600 dark:text-gray-400 text-xs">{b.source || 'private'}</span>
           }
+
         </td>
         <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
           ${((b.totalAmountCents || 0) / 100).toFixed(2)}

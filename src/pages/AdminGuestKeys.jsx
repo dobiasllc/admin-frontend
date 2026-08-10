@@ -74,7 +74,7 @@ function RescheduleModal({ booking, onClose, onSuccess, api }) {
     booking.guestKeyActivateOffsetMinutes ?? 30
   );
   const [revokeOffset, setRevokeOffset] = useState(
-    booking.guestKeyRevokeOffsetMinutes ?? 60
+    booking.guestKeyRevokeOffsetMinutes ?? 30
   );
   const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState("");
@@ -121,12 +121,12 @@ function RescheduleModal({ booking, onClose, onSuccess, api }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">
-              Revoke key (minutes <em>after</em> trip end)
+              Erase user data (minutes <em>after</em> trip end)
             </label>
             <input type="number" min={0} max={1440} value={revokeOffset}
               onChange={e => setRevokeOffset(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600" />
-            <p className="text-xs text-gray-400 mt-1 dark:text-gray-500">Default: 60 min after trip end</p>
+            <p className="text-xs text-gray-400 mt-1 dark:text-gray-500">Default: 30 min after trip end</p>
           </div>
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={onClose} disabled={busy}
@@ -657,7 +657,7 @@ export default function AdminGuestKeys() {
         {/* Source */}
         <td className="px-4 py-3">
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-            k.source === "turo"
+            (k.source === "turo" || k.source === "turo_csv_import")
               ? "bg-teal-100 text-teal-800"
               : "bg-purple-100 text-purple-800"
           }`}>
