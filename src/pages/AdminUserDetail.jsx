@@ -40,6 +40,10 @@ export default function AdminUserDetail() {
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
 
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileForm, setProfileForm] = useState({});
+  const [profileSaving, setProfileSaving] = useState(false);
+
 
   const load = useCallback(() => {
     setLoading(true);
@@ -119,6 +123,39 @@ export default function AdminUserDetail() {
     }
   };
 
+  const startProfileEdit = () => {
+    setProfileForm({
+      fullName: user?.fullName || '',
+      phone:    user?.phone || '',
+      address:  user?.address || '',
+      city:     user?.city || '',
+      dob:      user?.dob || '',
+      dlNumber: user?.dlNumber || '',
+      dlState:  user?.dlState || '',
+    });
+    setProfileEditing(true);
+  };
+
+  const cancelProfileEdit = () => {
+    setProfileEditing(false);
+    setProfileForm({});
+  };
+
+  const saveProfileEdit = async () => {
+    setProfileSaving(true);
+    setActionMsg('');
+    try {
+      await api.put(`/admin/users/${id}`, profileForm);
+      setActionMsg('Profile updated successfully.');
+      setProfileEditing(false);
+      load();
+    } catch (e) {
+      setActionMsg(`Error: ${e.response?.data?.error || 'Failed to update profile'}`);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const status = verification?.verificationStatus || user?.verificationStatus || 'unverified';
 
 
@@ -165,6 +202,88 @@ export default function AdminUserDetail() {
                 <div><dt className="text-gray-400 text-xs dark:text-gray-500">Joined</dt><dd>{fmtDate(user.createdAt)}</dd></div>
                 <div><dt className="text-gray-400 text-xs dark:text-gray-500">Updated</dt><dd>{fmtDate(user.updatedAt)}</dd></div>
               </dl>
+            </div>
+
+            {/* Editable profile fields */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Profile Details</h2>
+                <div className="flex gap-2">
+                  {!profileEditing ? (
+                    <button onClick={startProfileEdit}
+                      className="text-xs bg-gray-600 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition">
+                      Edit Profile
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={saveProfileEdit} disabled={profileSaving}
+                        className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                        {profileSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button onClick={cancelProfileEdit} disabled={profileSaving}
+                        className="text-xs bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-300 transition dark:bg-gray-700 dark:text-gray-200">
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {profileEditing ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-0.5">Full Name</label>
+                    <input type="text" value={profileForm.fullName || ''}
+                      onChange={e => setProfileForm(f => ({ ...f, fullName: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-0.5">Phone</label>
+                    <input type="text" value={profileForm.phone || ''}
+                      onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-gray-400 text-xs block mb-0.5">Home Address</label>
+                    <input type="text" value={profileForm.address || ''}
+                      onChange={e => setProfileForm(f => ({ ...f, address: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-0.5">City / State / ZIP</label>
+                    <input type="text" value={profileForm.city || ''}
+                      onChange={e => setProfileForm(f => ({ ...f, city: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-0.5">Date of Birth</label>
+                    <input type="date" value={profileForm.dob || ''}
+                      onChange={e => setProfileForm(f => ({ ...f, dob: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-0.5">Driver's License #</label>
+                    <input type="text" value={profileForm.dlNumber || ''}
+                      onChange={e => setProfileForm(f => ({ ...f, dlNumber: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-0.5">License State</label>
+                    <input type="text" value={profileForm.dlState || ''} maxLength={2}
+                      onChange={e => setProfileForm(f => ({ ...f, dlState: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                </div>
+              ) : (
+                <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                  <div><dt className="text-gray-400 text-xs dark:text-gray-500">Phone</dt><dd>{user.phone || '—'}</dd></div>
+                  <div><dt className="text-gray-400 text-xs dark:text-gray-500">Address</dt><dd>{user.address || '—'}</dd></div>
+                  <div><dt className="text-gray-400 text-xs dark:text-gray-500">City/State/ZIP</dt><dd>{user.city || '—'}</dd></div>
+                  <div><dt className="text-gray-400 text-xs dark:text-gray-500">Date of Birth</dt><dd>{user.dob || '—'}</dd></div>
+                  <div><dt className="text-gray-400 text-xs dark:text-gray-500">DL Number</dt><dd>{user.dlNumber || '—'}</dd></div>
+                  <div><dt className="text-gray-400 text-xs dark:text-gray-500">DL State</dt><dd>{user.dlState || '—'}</dd></div>
+                </dl>
+              )}
             </div>
 
             {/* Verification review */}

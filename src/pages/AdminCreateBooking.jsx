@@ -4,29 +4,23 @@
  * Route: /bookings/new
  *
  * Workflow:
- *   Step 1 — Fill in all details (vehicle, dates, guest info, additional driver,
- *             payment method, purpose/notes). Preview draft contract at any time.
- *   Step 2 — Review summary, then confirm.
+ *   Step 1 — Fill in all details (vehicle, calendar date/time picker, guest info,
+ *             additional driver, payment method, purpose/notes). Preview draft
+ *             contract at any time.
+ *   Step 2 — Review summary, adjust price/deposit if needed, then confirm.
  *   After confirmation — go to booking detail page to print the official contract,
  *             get it signed in person, then mark it as signed from the detail page.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useApi } from "../context/AuthContext";
 import AdminLayout from "../components/AdminNav";
+import PersonPicker from "../components/PersonPicker";
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function toLocalInput(d) {
-  const pad = n => String(n).padStart(2, "0");
-  return (
-    d.getFullYear() + "-" +
-    pad(d.getMonth() + 1) + "-" +
-    pad(d.getDate()) + "T" +
-    pad(d.getHours()) + ":" +
-    pad(d.getMinutes())
-  );
-}
+function pad(n) { return String(n).padStart(2, "0"); }
 
 function toNaiveLocal(datetimeLocalValue) {
   if (!datetimeLocalValue) return "";
@@ -45,6 +39,33 @@ function calcDays(start, end) {
   const e = new Date(end);
   const diff = (e - s) / 86400000;
   return Math.max(1, Math.ceil(diff));
+}
+
+function fmtDateStr(y, m, d) {
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+
+// 30-minute time-of-day options
+const TIME_SLOTS = (() => {
+  const out = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      out.push(`${pad(h)}:${pad(m)}`);
+    }
+  }
+  return out;
+})();
+
+function isTimeSlotAvailable(dateStr, timeStr, bookings, bufferHours) {
+  const slotDt = new Date(`${dateStr}T${timeStr}:00`);
+  for (const b of bookings || []) {
+    const s = new Date((b.start || "").replace(" ", "T"));
+    const e = new Date((b.end || "").replace(" ", "T"));
+    if (isNaN(s) || isNaN(e)) continue;
+    const eBuffered = new Date(e.getTime() + (bufferHours || 0) * 3600000);
+    if (slotDt >= s && slotDt < eBuffered) return false;
+  }
+  return true;
 }
 
 // ── Payment method options ────────────────────────────────────────────────────
@@ -73,6 +94,97 @@ function getNoticeText(paymentMethod) {
   }
 }
 
+const STEPS = ["Details", "Review"];
+
+// ── Address autocomplete (OpenStreetMap Nominatim — free, no API key) ────────
+function AddressAutocomplete({ value, onChange, placeholder, inputClassName }) {
+  const [query, setQuery] = useState(value || "");
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => { setQuery(value || ""); }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleInput = (val) => {
+    setQuery(val);
+    onChange(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!val || val.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          format: "json",
+          q: val,
+          countrycodes: "us",
+          limit: "5",
+          addressdetails: "1",
+        });
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+          headers: { "Accept-Language": "en-US" },
+        });
+        const data = await resp.json();
+        setSuggestions(Array.isArray(data) ? data : []);
+        setOpen(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 450);
+  };
+
+  const selectSuggestion = (s) => {
+    setQuery(s.display_name);
+    onChange(s.display_name);
+    setOpen(false);
+    setSuggestions([]);
+  };
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <input
+        type="text"
+        value={query}
+        onChange={e => handleInput(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        placeholder={placeholder}
+        className={inputClassName}
+        autoComplete="off"
+      />
+      {loading && (
+        <div className="absolute right-3 top-2.5 animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-500" />
+      )}
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-auto text-sm dark:bg-gray-800 dark:border-gray-700">
+          {suggestions.map((s, i) => (
+            <li
+              key={i}
+              onClick={() => selectSuggestion(s)}
+              className="px-3 py-2 hover:bg-blue-50 cursor-pointer dark:hover:bg-gray-700 dark:text-gray-200"
+            >
+              {s.display_name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminCreateBooking() {
   const api      = useApi();
@@ -86,83 +198,60 @@ export default function AdminCreateBooking() {
 
   // Core booking fields
   const [vin, setVin]               = useState("");
-  const [startDate, setStart]       = useState("");
-  const [endDate, setEnd]           = useState("");
   const [purpose, setPurpose]       = useState("");
   const [notes, setNotes]           = useState("");
   const [pickupLocation, setPickup] = useState("");
   const [paymentMethod, setPayment] = useState("bank_transfer");
 
-  // Primary renter
-  const [guestName,    setGuestName]    = useState("");
-  const [guestPhone,   setGuestPhone]   = useState("");
-  const [guestEmail,   setGuestEmail]   = useState("");
-  const [guestAddress, setGuestAddress] = useState("");
-  const [guestCity,    setGuestCity]    = useState("");
-  const [guestDOB,     setGuestDOB]     = useState("");
-  const [guestDLNum,   setGuestDLNum]   = useState("");
-  const [guestDLState, setGuestDLState] = useState("");
-  const [guestDLExp,   setGuestDLExp]   = useState("");
+  // Calendar / date-time picker state
+  const now0 = new Date();
+  const [calMonth, setCalMonth] = useState(now0.getMonth() + 1);
+  const [calYear, setCalYear]   = useState(now0.getFullYear());
+  const [calendarData, setCalendarData] = useState(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
 
-  // Additional driver
-  const [addlName,    setAddlName]    = useState("");
-  const [addlAddress, setAddlAddress] = useState("");
-  const [addlDLNum,   setAddlDLNum]   = useState("");
-  const [addlDLState, setAddlDLState] = useState("");
-  const [addlDLExp,   setAddlDLExp]   = useState("");
-  const [addlDOB,     setAddlDOB]     = useState("");
+  const [selStartDay, setSelStartDay] = useState(""); // "YYYY-MM-DD"
+  const [selEndDay, setSelEndDay]     = useState("");
+  const [startTime, setStartTime]     = useState("10:00");
+  const [endTime, setEndTime]         = useState("10:00");
 
-  // Availability check
-  const [availChecking, setAvailChecking] = useState(false);
-  const [availConflict, setAvailConflict] = useState(null); // null=unchecked, false=ok, string=conflict msg
+  const startDate = selStartDay ? `${selStartDay}T${startTime}` : "";
+  const endDate   = selEndDay ? `${selEndDay}T${endTime}` : "";
+
+  // Primary renter — via PersonPicker (may link an existing account)
+  const [renter, setRenter] = useState({});
+  const guestName    = renter.name || "";
+  const guestPhone   = renter.phone || "";
+  const guestEmail   = renter.email || "";
+  const guestAddress = renter.address || "";
+  const guestCity    = renter.city || "";
+  const guestDOB     = renter.dob || "";
+  const guestDLNum   = renter.dlNumber || "";
+  const guestDLState = renter.dlState || "";
+  const guestDLExp   = renter.dlExp || "";
+
+  // Additional driver — via PersonPicker (may link an existing account)
+  const [addlDriver, setAddlDriver] = useState({});
+  const addlName    = addlDriver.name || "";
+  const addlAddress = addlDriver.address || "";
+  const addlDLNum   = addlDriver.dlNumber || "";
+  const addlDLState = addlDriver.dlState || "";
+  const addlDLExp   = addlDriver.dlExp || "";
+  const addlDOB     = addlDriver.dob || "";
+
+
+  // Price/deposit overrides (Step 2)
+  const [totalOverride, setTotalOverride]     = useState(null); // cents, null = use default
+  const [depositOverride, setDepositOverride] = useState(null);
+  const [totalInputStr, setTotalInputStr]     = useState(""); // raw text while typing
+  const [depositInputStr, setDepositInputStr] = useState("");
+
+  // Admin override: skip the cleaning/turnover buffer for this booking
+  const [skipCleaningBuffer, setSkipCleaningBuffer] = useState(false);
 
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState("");
-
-  // Check availability whenever vin/dates change
-  useEffect(() => {
-    if (!vin || !startDate || !endDate || startDate >= endDate) {
-      setAvailConflict(null);
-      return;
-    }
-    setAvailChecking(true);
-    setAvailConflict(null);
-    const params = new URLSearchParams({
-      vin,
-      start: toNaiveLocal(startDate),
-      end:   toNaiveLocal(endDate),
-    });
-    api.get(`/vehicles/available?${params}`)
-      .then(r => {
-        // The endpoint returns either:
-        //   { available: bool, conflict: {...} }  (single-VIN check)
-        //   an array of available VIN strings     (multi-vehicle list)
-        const data = r.data;
-        let isAvailable;
-        if (Array.isArray(data)) {
-          // Array of available VINs — check if our VIN is in the list
-          isAvailable = data.includes(vin);
-        } else if (data && typeof data.available === 'boolean') {
-          isAvailable = data.available;
-        } else {
-          // Unexpected shape — treat as available to avoid false blocks
-          isAvailable = true;
-        }
-
-        if (!isAvailable) {
-          const conflict = Array.isArray(data) ? null : data?.conflict;
-          const msg = conflict
-            ? `Conflict with booking ${(conflict.bookingId || '').slice(0,12)}… (${conflict.startTime?.slice(0,10)} → ${conflict.endTime?.slice(0,10)})`
-            : "Vehicle is not available for these dates.";
-          setAvailConflict(msg);
-        } else {
-          setAvailConflict(false);
-        }
-      })
-      .catch(() => setAvailConflict(null)) // silently ignore check errors
-      .finally(() => setAvailChecking(false));
-  }, [vin, startDate, endDate]);
 
   // Load vehicles
   useEffect(() => {
@@ -178,27 +267,104 @@ export default function AdminCreateBooking() {
       .finally(() => setVehiclesLoading(false));
   }, []);
 
-  // Default dates: next Friday → next Sunday
+  // Default calendar to today; pre-set default pickup location from vehicle home address
   useEffect(() => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const daysUntilFri = (5 - dayOfWeek + 7) % 7 || 7;
-    const fri = new Date(now);
-    fri.setDate(now.getDate() + daysUntilFri);
-    fri.setHours(10, 0, 0, 0);
-    const sun = new Date(fri);
-    sun.setDate(fri.getDate() + 2);
-    sun.setHours(10, 0, 0, 0);
-    setStart(toLocalInput(fri));
-    setEnd(toLocalInput(sun));
-  }, []);
+    const v = vehicles.find(v => v.vin === vin);
+    if (v && !pickupLocation) {
+      const parts = [v.homeAddress, v.homeCity, v.homeState, v.homeZip].filter(Boolean);
+      if (parts.length) setPickup(parts.join(", "));
+    }
+  }, [vin, vehicles]);
+
+  // Fetch calendar month data whenever vin/month/year changes
+  useEffect(() => {
+    if (!vin) return;
+    setCalendarLoading(true);
+    api.get(`/vehicles/${vin}/calendar?month=${calMonth}&year=${calYear}`)
+      .then(r => setCalendarData(r.data))
+      .catch(() => setCalendarData(null))
+      .finally(() => setCalendarLoading(false));
+  }, [vin, calMonth, calYear]);
 
   const selectedVehicle = vehicles.find(v => v.vin === vin);
   const numDays         = calcDays(startDate, endDate);
   const dailyRate       = selectedVehicle?.dailyRateCents || 0;
-  const totalCents      = dailyRate * numDays;
+  const defaultTotalCents   = dailyRate * numDays;
+  const defaultDepositCents = Math.min(dailyRate, 50000);
+  const totalCents      = totalOverride !== null ? totalOverride : defaultTotalCents;
+  const depositCents    = depositOverride !== null ? depositOverride : defaultDepositCents;
 
   const canReview = vin && startDate && endDate && startDate < endDate;
+
+  // Initialize the free-typing price input strings when we (re)compute new defaults
+  // and no override is currently in effect, so Step 2 shows a sensible starting value.
+  useEffect(() => {
+    if (totalOverride === null) setTotalInputStr((defaultTotalCents / 100).toFixed(2));
+  }, [defaultTotalCents, totalOverride]);
+  useEffect(() => {
+    if (depositOverride === null) setDepositInputStr((defaultDepositCents / 100).toFixed(2));
+  }, [defaultDepositCents, depositOverride]);
+
+
+  // ── Calendar helpers ───────────────────────────────────────────────────────
+  const dayMap = {};
+  (calendarData?.days || []).forEach(d => { dayMap[d.date] = d; });
+
+  const goPrevMonth = () => {
+    if (calMonth === 1) { setCalMonth(12); setCalYear(y => y - 1); }
+    else setCalMonth(m => m - 1);
+  };
+  const goNextMonth = () => {
+    if (calMonth === 12) { setCalMonth(1); setCalYear(y => y + 1); }
+    else setCalMonth(m => m + 1);
+  };
+
+  const handleDayClick = (dateStr, available) => {
+    if (!available) return;
+    if (dateStr === selStartDay) {
+      // Clicking the same day as start again — allow same-day start+end
+      // (they'll need different times to form a valid range).
+      setSelEndDay(dateStr);
+      return;
+    }
+    if (!selStartDay || (selStartDay && selEndDay)) {
+      // Start a fresh selection
+      setSelStartDay(dateStr);
+      setSelEndDay("");
+    } else if (dateStr < selStartDay) {
+      setSelStartDay(dateStr);
+      setSelEndDay("");
+    } else {
+      setSelEndDay(dateStr);
+    }
+  };
+
+  const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+  const firstOfMonth = new Date(calYear, calMonth - 1, 1);
+  const leadingBlanks = firstOfMonth.getDay(); // 0=Sun
+
+  const effectiveBufferHours = skipCleaningBuffer ? 0 : (calendarData?.turnoverBufferHours || 0);
+
+  const startSlotsBlocked = new Set(
+    selStartDay
+      ? TIME_SLOTS.filter(t => !isTimeSlotAvailable(selStartDay, t, calendarData?.bookings, effectiveBufferHours))
+      : []
+  );
+  const endSlotsBlocked = new Set(
+    selEndDay
+      ? TIME_SLOTS.filter(t => !isTimeSlotAvailable(selEndDay, t, calendarData?.bookings, effectiveBufferHours))
+      : []
+  );
+
+  // Today's date string (business-local, best-effort using browser local time)
+  const todayStr = fmtDateStr(now0.getFullYear(), now0.getMonth() + 1, now0.getDate());
+
+  // A day is only fully unavailable if EVERY time slot that day is blocked
+  // (partial-day bookings should still allow picking the free portion of the day).
+  function isDayFullyBooked(dateStr) {
+    return TIME_SLOTS.every(t => !isTimeSlotAvailable(dateStr, t, calendarData?.bookings, effectiveBufferHours));
+  }
+
 
   // ── Open draft print preview ───────────────────────────────────────────────
   const openPrintPreview = (isDraft = true) => {
@@ -227,6 +393,7 @@ export default function AdminCreateBooking() {
       pickupLocation,
       paymentMethod,
       totalCents:     String(totalCents),
+      depositCents:   String(depositCents),
       numDays:        String(numDays),
       dailyRateCents: String(dailyRate),
       vehicleName:    selectedVehicle
@@ -243,6 +410,8 @@ export default function AdminCreateBooking() {
     try {
       const res = await api.post("/admin/bookings", {
         vin,
+        user_id:              renter.userId || "",
+        addl_driver_user_id:  addlDriver.userId || "",
         start_time:      toNaiveLocal(startDate),
         end_time:        toNaiveLocal(endDate),
         guest_name:      guestName,
@@ -264,7 +433,11 @@ export default function AdminCreateBooking() {
         notes,
         pickup_location: pickupLocation,
         payment_method:  paymentMethod,
+        total_amount_cents:   totalCents,
+        deposit_amount_cents: depositCents,
+        skip_cleaning_buffer: skipCleaningBuffer,
       });
+
       navigate(`/bookings/${res.data.booking_id}`);
     } catch (e) {
       setError(e.response?.data?.error || e.message || "Booking failed");
@@ -275,7 +448,9 @@ export default function AdminCreateBooking() {
   };
 
   // ── Input class helper ─────────────────────────────────────────────────────
-  const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600";
+  const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-800";
+
+  const monthLabel = new Date(calYear, calMonth - 1, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -286,16 +461,27 @@ export default function AdminCreateBooking() {
         <div className="mb-6">
           <Link to="/bookings" className="text-sm text-blue-600 hover:underline">← Back to Bookings</Link>
           <h1 className="text-2xl font-bold text-gray-900 mt-1 dark:text-gray-100">New Admin Booking</h1>
-          <p className="text-sm text-gray-500 mt-0.5 dark:text-gray-400">
-            Creates a confirmed booking directly — no Stripe charge, no e-signature required at creation.
-            Print and sign the contract from the booking detail page after confirming.
-          </p>
         </div>
 
-        {/* Amber notice */}
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-          <span className="font-semibold">⚠ Admin Booking</span>
-          {" — "}{getNoticeText(paymentMethod)}
+        {/* Step indicator */}
+        <div className="flex items-center mb-6">
+          {STEPS.map((s, i) => (
+            <div key={s} className="flex items-center">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                ${i <= step - 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500 dark:bg-gray-700'}`}>
+                {i + 1}
+              </div>
+              <span className={`ml-2 text-sm font-medium ${i === step - 1 ? 'text-blue-600' : 'text-gray-400 dark:text-gray-500'}`}>{s}</span>
+              {i < STEPS.length - 1 && <div className="w-8 h-px bg-gray-300 mx-3 dark:bg-gray-600" />}
+            </div>
+          ))}
+        </div>
+
+        {/* Consolidated admin-booking notice */}
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300">
+          <span className="font-semibold">⚠ Admin Booking</span> — Creates a confirmed booking directly, bypassing Stripe and e-signature at creation.
+          {" "}{getNoticeText(paymentMethod)}
+          {" "}Print and sign the contract from the booking detail page after confirming.
         </div>
 
         {error && (
@@ -312,7 +498,7 @@ export default function AdminCreateBooking() {
               {vehiclesLoading ? (
                 <div className="text-sm text-gray-400 dark:text-gray-500">Loading vehicles…</div>
               ) : (
-                <select value={vin} onChange={e => setVin(e.target.value)} className={inp + " bg-white dark:bg-gray-800"}>
+                <select value={vin} onChange={e => { setVin(e.target.value); setSelStartDay(""); setSelEndDay(""); }} className={inp}>
                   {vehicles.map(v => (
                     <option key={v.vin} value={v.vin}>
                       {v.year} {v.make} {v.model}
@@ -323,130 +509,116 @@ export default function AdminCreateBooking() {
               )}
             </div>
 
-            {/* Dates */}
+            {/* Calendar date/time picker */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Select Dates</label>
+              <div className="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <button type="button" onClick={goPrevMonth} className="px-2 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700">‹</button>
+                  <span className="text-sm font-medium">{monthLabel}</span>
+                  <button type="button" onClick={goNextMonth} className="px-2 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700">›</button>
+                </div>
+                {calendarLoading ? (
+                  <div className="text-xs text-gray-400 py-4 text-center">Loading availability…</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-gray-400 mb-1">
+                      {["S","M","T","W","T","F","S"].map((d, i) => <div key={i}>{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
+                      {Array.from({ length: daysInMonth }).map((_, i) => {
+                        const d = i + 1;
+                        const dateStr = fmtDateStr(calYear, calMonth, d);
+                        const isPast = dateStr < todayStr;
+                        const available = !isPast && !isDayFullyBooked(dateStr);
+                        const isStart = dateStr === selStartDay;
+
+                        const isEnd = dateStr === selEndDay;
+                        const inRange = selStartDay && selEndDay && dateStr > selStartDay && dateStr < selEndDay;
+                        return (
+                          <button
+                            type="button"
+                            key={dateStr}
+                            disabled={!available}
+                            onClick={() => handleDayClick(dateStr, available)}
+                            className={`text-xs rounded py-1.5 transition
+                              ${!available ? "text-gray-300 line-through cursor-not-allowed dark:text-gray-600" : "cursor-pointer"}
+                              ${isStart || isEnd ? "bg-blue-600 text-white font-semibold" : ""}
+                              ${inRange ? "bg-blue-100 dark:bg-blue-900/40" : ""}
+                              ${available && !isStart && !isEnd && !inRange ? "hover:bg-gray-100 dark:hover:bg-gray-700" : ""}
+                            `}
+                          >
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                <p className="text-[11px] text-gray-400 mt-2 dark:text-gray-500">
+                  Click a start day, then an end day. Greyed-out dates are unavailable (booked or blocked).
+                </p>
+              </div>
+            </div>
+
+            {/* Time-of-day pickers */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Start Date & Time</label>
-                <input type="datetime-local" value={startDate} onChange={e => setStart(e.target.value)} className={inp} />
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Start Time {selStartDay && `(${selStartDay})`}</label>
+                <select value={startTime} onChange={e => setStartTime(e.target.value)} disabled={!selStartDay} className={inp}>
+                  {TIME_SLOTS.map(t => (
+                    <option key={t} value={t} disabled={startSlotsBlocked.has(t)}>
+                      {t}{startSlotsBlocked.has(t) ? " (unavailable)" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">End Date & Time</label>
-                <input type="datetime-local" value={endDate} onChange={e => setEnd(e.target.value)} className={inp} />
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">End Time {selEndDay && `(${selEndDay})`}</label>
+                <select value={endTime} onChange={e => setEndTime(e.target.value)} disabled={!selEndDay} className={inp}>
+                  {TIME_SLOTS.map(t => (
+                    <option key={t} value={t} disabled={endSlotsBlocked.has(t)}>
+                      {t}{endSlotsBlocked.has(t) ? " (unavailable)" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             {startDate && endDate && startDate >= endDate && (
-              <p className="text-xs text-red-600">End date must be after start date.</p>
+              <p className="text-xs text-red-600">End date/time must be after start date/time.</p>
             )}
 
-            {/* Availability indicator */}
-            {availChecking && (
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />
-                Checking availability…
-              </div>
-            )}
-            {!availChecking && availConflict === false && vin && startDate && endDate && startDate < endDate && (
-              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 dark:bg-green-900/20">
-                <span>✓</span> Vehicle is available for these dates.
-              </div>
-            )}
-            {!availChecking && availConflict && (
-              <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 dark:bg-red-900/20">
-                <span>⚠</span> <span><strong>Booking conflict:</strong> {availConflict}</span>
-              </div>
-            )}
-
-            {/* Primary Renter */}
-            <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 dark:text-gray-500">
-                Primary Renter
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Full Name</label>
-                  <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Full name" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Phone</label>
-                  <input type="tel" value={guestPhone} onChange={e => setGuestPhone(e.target.value)} placeholder="(555) 555-5555" className={inp} />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Email</label>
-                  <input type="email" value={guestEmail} onChange={e => setGuestEmail(e.target.value)} placeholder="renter@example.com" className={inp} />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Home Address</label>
-                  <input type="text" value={guestAddress} onChange={e => setGuestAddress(e.target.value)} placeholder="123 Main St" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">City / State / ZIP</label>
-                  <input type="text" value={guestCity} onChange={e => setGuestCity(e.target.value)} placeholder="Milwaukee, WI 53201" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Date of Birth</label>
-                  <input type="date" value={guestDOB} onChange={e => setGuestDOB(e.target.value)} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Driver's License #</label>
-                  <input type="text" value={guestDLNum} onChange={e => setGuestDLNum(e.target.value)} placeholder="D123-4567-8901" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">License State</label>
-                  <input type="text" value={guestDLState} onChange={e => setGuestDLState(e.target.value)} placeholder="WI" maxLength={2} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">License Expiration</label>
-                  <input type="date" value={guestDLExp} onChange={e => setGuestDLExp(e.target.value)} className={inp} />
-                </div>
-              </div>
+            {/* Cleaning buffer override */}
+            <div className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                id="skipCleaningBuffer"
+                checked={skipCleaningBuffer}
+                onChange={e => setSkipCleaningBuffer(e.target.checked)}
+                className="mt-0.5"
+              />
+              <label htmlFor="skipCleaningBuffer" className="text-sm text-gray-700 dark:text-gray-300">
+                Skip cleaning buffer <span className="text-gray-400">(admin override)</span>
+                <span className="block text-xs text-gray-400 dark:text-gray-500">
+                  Admin bookings are often unique/one-off and may not require the standard turnover buffer between bookings.
+                </span>
+              </label>
             </div>
 
-            {/* Additional Driver */}
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">
-                Additional Authorized Driver
-                <span className="font-normal normal-case ml-1">(optional)</span>
-              </p>
-              <p className="text-xs text-gray-400 mb-3">
-                Only drivers listed here are authorized to operate the vehicle per the rental agreement.
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                  <input type="text" value={addlName} onChange={e => setAddlName(e.target.value)} placeholder="Full name" className={inp} />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Home Address</label>
-                  <input type="text" value={addlAddress} onChange={e => setAddlAddress(e.target.value)} placeholder="123 Main St, City, ST 00000" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Driver's License #</label>
-                  <input type="text" value={addlDLNum} onChange={e => setAddlDLNum(e.target.value)} placeholder="D123-4567-8901" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">License State</label>
-                  <input type="text" value={addlDLState} onChange={e => setAddlDLState(e.target.value)} placeholder="WI" maxLength={2} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">License Expiration</label>
-                  <input type="date" value={addlDLExp} onChange={e => setAddlDLExp(e.target.value)} className={inp} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Date of Birth</label>
-                  <input type="date" value={addlDOB} onChange={e => setAddlDOB(e.target.value)} className={inp} />
-                </div>
-              </div>
-            </div>
+
+            <PersonPicker label="Primary Renter" value={renter} onChange={setRenter} showDlFields={true} />
+
+            <PersonPicker label="Additional Authorized Driver (optional)" value={addlDriver} onChange={setAddlDriver} showDlFields={true} />
 
             {/* Payment */}
             <div className="border-t border-gray-100 pt-4 dark:border-gray-700">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 dark:text-gray-500">Payment Method</p>
-              <select value={paymentMethod} onChange={e => setPayment(e.target.value)} className={inp + " bg-white dark:bg-gray-800"}>
+              <select value={paymentMethod} onChange={e => setPayment(e.target.value)} className={inp}>
                 {PAYMENT_OPTIONS.map(o => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-400 mt-1.5 dark:text-gray-500">{getNoticeText(paymentMethod)}</p>
             </div>
 
             {/* Trip purpose & notes */}
@@ -466,7 +638,12 @@ export default function AdminCreateBooking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Pickup / Return Location</label>
-                <input type="text" value={pickupLocation} onChange={e => setPickup(e.target.value)} placeholder="e.g. Muskego, WI" className={inp} />
+                <AddressAutocomplete
+                  value={pickupLocation}
+                  onChange={setPickup}
+                  placeholder="Start typing an address…"
+                  inputClassName={inp}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Internal Notes</label>
@@ -540,6 +717,12 @@ export default function AdminCreateBooking() {
                   <dt className="text-gray-400 dark:text-gray-500">Payment</dt>
                   <dd>{PAYMENT_OPTIONS.find(o => o.value === paymentMethod)?.label}</dd>
                 </div>
+                {pickupLocation && (
+                  <div className="col-span-2">
+                    <dt className="text-gray-400 dark:text-gray-500">Pickup / Return</dt>
+                    <dd className="text-xs">{pickupLocation}</dd>
+                  </div>
+                )}
                 {purpose && (
                   <div className="col-span-2">
                     <dt className="text-gray-400 dark:text-gray-500">Trip Purpose</dt>
@@ -549,13 +732,61 @@ export default function AdminCreateBooking() {
               </dl>
             </div>
 
-            {/* Pricing */}
+            {/* Pricing (editable overrides) */}
             <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 dark:text-gray-400">Pricing (record only — no Stripe charge)</h2>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">{formatCents(dailyRate)} × {numDays} day{numDays !== 1 ? "s" : ""}</span>
-                  <span>{formatCents(totalCents)}</span>
+              <div className="space-y-3 text-sm">
+                <p className="text-gray-500 dark:text-gray-400">
+                  Default: {formatCents(dailyRate)} × {numDays} day{numDays !== 1 ? "s" : ""} = {formatCents(defaultTotalCents)}
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Total Amount</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={totalInputStr}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        setTotalInputStr(raw);
+                        const parsed = parseFloat(raw);
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          setTotalOverride(Math.round(parsed * 100));
+                        } else if (raw.trim() === "") {
+                          setTotalOverride(null);
+                        }
+                      }}
+                      onBlur={() => setTotalInputStr((totalCents / 100).toFixed(2))}
+                      className={inp}
+                    />
+                    {totalOverride !== null && totalOverride !== defaultTotalCents && (
+                      <p className="text-[11px] text-amber-600 mt-1">(adjusted from {formatCents(defaultTotalCents)} default)</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Deposit Amount</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={depositInputStr}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        setDepositInputStr(raw);
+                        const parsed = parseFloat(raw);
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          setDepositOverride(Math.round(parsed * 100));
+                        } else if (raw.trim() === "") {
+                          setDepositOverride(null);
+                        }
+                      }}
+                      onBlur={() => setDepositInputStr((depositCents / 100).toFixed(2))}
+                      className={inp}
+                    />
+                    {depositOverride !== null && depositOverride !== defaultDepositCents && (
+                      <p className="text-[11px] text-amber-600 mt-1">(adjusted from {formatCents(defaultDepositCents)} default)</p>
+                    )}
+                  </div>
+
                 </div>
                 <div className="flex justify-between font-semibold border-t border-gray-100 pt-1.5 mt-1.5 dark:border-gray-700">
                   <span>Total Due</span>

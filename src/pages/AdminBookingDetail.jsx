@@ -18,6 +18,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useApi } from "../context/AuthContext";
 import AdminLayout from "../components/AdminNav";
+import PersonPicker from "../components/PersonPicker";
 import { normalisePortalUrl } from "../utils/guestPortal";
 
 function formatCents(c) { return `$${((c || 0) / 100).toFixed(2)}`; }
@@ -1453,9 +1454,7 @@ export default function AdminBookingDetail() {
 
   // E1/E3: Edit Booking panel state
   const [showEdit,      setShowEdit]      = useState(false);
-  const [editName,      setEditName]      = useState("");
-  const [editPhone,     setEditPhone]     = useState("");
-  const [editEmail,     setEditEmail]     = useState("");
+  const [editPerson,    setEditPerson]    = useState({});
   const [editTotal,     setEditTotal]     = useState("");
   const [editNotes,     setEditNotes]     = useState("");
   const [editPayMethod, setEditPayMethod] = useState("");
@@ -1748,9 +1747,12 @@ export default function AdminBookingDetail() {
             {!showEdit && (
               <button
                 onClick={() => {
-                  setEditName(booking.guestName || booking.turoGuestName || "");
-                  setEditPhone(booking.guestPhone || booking.turoGuestPhone || "");
-                  setEditEmail(booking.guestEmail || booking.turoGuestEmail || "");
+                  setEditPerson({
+                    userId: booking.userId || "",
+                    name: booking.guestName || booking.turoGuestName || "",
+                    phone: booking.guestPhone || booking.turoGuestPhone || "",
+                    email: booking.guestEmail || booking.turoGuestEmail || "",
+                  });
                   setEditTotal(booking.totalAmountCents != null ? String(Math.round(booking.totalAmountCents / 100 * 100) / 100) : "");
                   setEditNotes(booking.notes || "");
                   setEditPayMethod(booking.paymentMethod || "");
@@ -1777,25 +1779,10 @@ export default function AdminBookingDetail() {
             <div className="space-y-3">
               {editMsg && <div className="p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700 dark:bg-green-900/20">{editMsg}</div>}
               {editErr && <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20">{editErr}</div>}
+              <div className="mb-1">
+                <PersonPicker label="Guest" value={editPerson} onChange={setEditPerson} showDlFields={false} />
+              </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Guest Name</label>
-                  <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                    placeholder="Full name"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Guest Phone</label>
-                  <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Guest Email</label>
-                  <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-                    placeholder="guest@example.com"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-gray-600" />
-                </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Total Amount ($)</label>
                   <input type="number" min="0" step="0.01" value={editTotal} onChange={e => setEditTotal(e.target.value)}
@@ -1830,9 +1817,10 @@ export default function AdminBookingDetail() {
                   onClick={async () => {
                     setEditSaving(true); setEditMsg(""); setEditErr("");
                     const payload = {};
-                    if (editName.trim())  payload.guestName  = editName.trim();
-                    if (editPhone.trim()) payload.guestPhone = editPhone.trim();
-                    if (editEmail.trim()) payload.guestEmail = editEmail.trim();
+                    if (editPerson.name?.trim())  payload.guestName  = editPerson.name.trim();
+                    if (editPerson.phone?.trim()) payload.guestPhone = editPerson.phone.trim();
+                    if (editPerson.email?.trim()) payload.guestEmail = editPerson.email.trim();
+                    if (editPerson.userId && editPerson.userId !== booking.userId) payload.userId = editPerson.userId;
                     if (editTotal !== "") {
                       const cents = Math.round(parseFloat(editTotal) * 100);
                       if (isNaN(cents) || cents < 0) { setEditErr("Invalid total amount."); setEditSaving(false); return; }
