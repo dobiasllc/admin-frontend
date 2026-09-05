@@ -59,6 +59,14 @@ function AddVehicleModal({ onClose, onSaved }) {
         unlimitedMileageFeeCents: form.unlimitedMileageFeeCents === '' ? 0 : Math.round(Number(form.unlimitedMileageFeeCents) * 100),
         deliveryFeeCents: form.deliveryFeeCents === '' ? 0 : Math.round(Number(form.deliveryFeeCents) * 100),
         prepaidEnergyFeeCents: form.prepaidEnergyFeeCents === '' ? 0 : Math.round(Number(form.prepaidEnergyFeeCents) * 100),
+        // These are entered as dollars in the form (labels say "($)") but
+        // stored as *Cents fields — convert here, matching the fee fields
+        // above, so a value like "260.04" is stored as 26004 cents instead
+        // of the raw decimal-dollar string (which used to crash the
+        // Analytics page on read).
+        loanPrincipalCents: form.loanPrincipalCents === '' ? undefined : Math.round(Number(form.loanPrincipalCents) * 100),
+        ttrCents: form.ttrCents === '' ? undefined : Math.round(Number(form.ttrCents) * 100),
+        annualRegistrationCents: form.annualRegistrationCents === '' ? undefined : Math.round(Number(form.annualRegistrationCents) * 100),
       };
       await api.post('/admin/vehicles', payload);
       onSaved();

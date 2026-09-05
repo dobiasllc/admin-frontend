@@ -1891,6 +1891,33 @@ export default function AdminBookingDetail() {
           </div>
         )}
 
+        {/* Manual booking cancellation — available for any non-final-status
+            booking, including Turo, since this is exactly the "the cancellation
+            email got misplaced" recovery path. */}
+        {["pending", "confirmed", "active"].includes(booking.status) && (
+          <div className="bg-white rounded-xl border border-red-200 p-6 dark:bg-gray-800 dark:border-red-900/40">
+            <h2 className="text-sm font-semibold text-red-600 uppercase tracking-wide mb-4">Danger Zone</h2>
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Cancel this booking. This refunds any confirmed Stripe payment, releases the deposit hold,
+                clears pending guest-key schedules, and reclaims any loyalty points earned.
+              </p>
+              <button
+                onClick={() => {
+                  const reason = window.prompt(
+                    "Cancel this booking? Optionally enter a reason (e.g. \"Guest requested via missed cancellation email\"):",
+                    ""
+                  );
+                  if (reason === null) return; // user hit Cancel on the prompt
+                  doAction(`/admin/bookings/${id}/cancel`, "Booking cancellation", { reason });
+                }}
+                className="shrink-0 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition">
+                Cancel Booking
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Issue 2: Payment panels */}
         {showStripePanel && (
           <StripePaymentPanel booking={booking} onRefresh={reload} />

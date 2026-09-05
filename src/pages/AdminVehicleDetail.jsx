@@ -228,7 +228,19 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
 
-  useEffect(() => { setForm(vehicle); }, [vehicle]);
+  // loanPrincipalCents/ttrCents/annualRegistrationCents are stored in cents
+  // but edited as dollars (labels say "($)") — convert to dollars for display
+  // here; handleSave converts back to cents on submit. Without this, editing
+  // an existing vehicle would show the raw cents value in a dollar-labeled
+  // field and re-saving it would multiply by 100 again.
+  useEffect(() => {
+    setForm({
+      ...vehicle,
+      loanPrincipalCents: vehicle?.loanPrincipalCents != null ? vehicle.loanPrincipalCents / 100 : '',
+      ttrCents: vehicle?.ttrCents != null ? vehicle.ttrCents / 100 : '',
+      annualRegistrationCents: vehicle?.annualRegistrationCents != null ? vehicle.annualRegistrationCents / 100 : '',
+    });
+  }, [vehicle]);
 
   const fields = [
     ['make', 'Make', 'text'],
@@ -275,6 +287,14 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
         unlimitedMileageFeeCents: form.unlimitedMileageFeeCents === '' || form.unlimitedMileageFeeCents == null ? 0 : Math.round(Number(form.unlimitedMileageFeeCents) * 100),
         deliveryFeeCents: form.deliveryFeeCents === '' || form.deliveryFeeCents == null ? 0 : Math.round(Number(form.deliveryFeeCents) * 100),
         prepaidEnergyFeeCents: form.prepaidEnergyFeeCents === '' || form.prepaidEnergyFeeCents == null ? 0 : Math.round(Number(form.prepaidEnergyFeeCents) * 100),
+        // These are entered as dollars in the form (labels say "($)") but
+        // stored as *Cents fields — convert here, matching the fee fields
+        // above, so a value like "260.04" is stored as 26004 cents instead
+        // of the raw decimal-dollar string (which used to crash the
+        // Analytics page on read).
+        loanPrincipalCents: form.loanPrincipalCents === '' || form.loanPrincipalCents == null ? undefined : Math.round(Number(form.loanPrincipalCents) * 100),
+        ttrCents: form.ttrCents === '' || form.ttrCents == null ? undefined : Math.round(Number(form.ttrCents) * 100),
+        annualRegistrationCents: form.annualRegistrationCents === '' || form.annualRegistrationCents == null ? undefined : Math.round(Number(form.annualRegistrationCents) * 100),
       };
       await api.put(`/admin/vehicles/${vehicle.vin}`, payload);
 
@@ -296,7 +316,12 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
           <button onClick={() => setEditing(true)} className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">Edit</button>
         ) : (
           <div className="flex gap-2">
-            <button onClick={() => { setEditing(false); setForm(vehicle); }} className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">Cancel</button>
+            <button onClick={() => { setEditing(false); setForm({
+              ...vehicle,
+              loanPrincipalCents: vehicle?.loanPrincipalCents != null ? vehicle.loanPrincipalCents / 100 : '',
+              ttrCents: vehicle?.ttrCents != null ? vehicle.ttrCents / 100 : '',
+              annualRegistrationCents: vehicle?.annualRegistrationCents != null ? vehicle.annualRegistrationCents / 100 : '',
+            }); }} className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">Cancel</button>
             <button onClick={handleSave} disabled={saving} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
           </div>
         )}
@@ -396,9 +421,9 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Tesla Vehicle ID</dt><dd className="truncate">{vehicle.teslaVehicleId || '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Purchase Price</dt><dd>{vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Purchase Date</dt><dd>{vehicle.purchaseDate || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan Principal</dt><dd>{vehicle.loanPrincipalCents ? `$${Number(vehicle.loanPrincipalCents).toLocaleString()}` : '—'}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan Principal</dt><dd>{vehicle.loanPrincipalCents ? fmtMoney(vehicle.loanPrincipalCents) : '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan APR</dt><dd>{vehicle.loanAPR || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Annual Registration</dt><dd>{vehicle.annualRegistrationCents ? `$${Number(vehicle.annualRegistrationCents).toLocaleString()}` : '—'}</dd></div>
+          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Annual Registration</dt><dd>{vehicle.annualRegistrationCents ? fmtMoney(vehicle.annualRegistrationCents) : '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Home Address</dt><dd>{vehicle.homeAddress || '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Home City/State/Zip</dt><dd>{[vehicle.homeCity, vehicle.homeState, vehicle.homeZip].filter(Boolean).join(', ') || '—'}</dd></div>
           <div>
