@@ -392,6 +392,43 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
             <label htmlFor="teslaEnabled" className="text-sm text-gray-700 dark:text-gray-300">Tesla Enabled</label>
           </div>
 
+          {form.teslaEnabled && (
+            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Post-Checkout Reset Behavior</p>
+              <p className="text-xs text-gray-500 mb-2 dark:text-gray-400">
+                Tesla's "erase user data" checkout process resets several vehicle settings to factory
+                defaults. These two are automatically restored to your chosen value right after each erase.
+                (Temperature display units and locally-cached driver profiles have no Tesla API command
+                to restore, so they can't be toggled here.)
+              </p>
+            </div>
+          )}
+          {form.teslaEnabled && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Cabin Overheat Protection</label>
+              <select value={form.postEraseCabinOverheatMode || 'off'}
+                onChange={e => setForm(f => ({ ...f, postEraseCabinOverheatMode: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
+                <option value="off">Off (saves battery while parked)</option>
+                <option value="no_ac">On — Fan Only</option>
+                <option value="on">On — Full A/C</option>
+              </select>
+            </div>
+          )}
+          {form.teslaEnabled && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Climate Keeper Mode</label>
+              <select value={form.postEraseClimateKeeperMode || 'off'}
+                onChange={e => setForm(f => ({ ...f, postEraseClimateKeeperMode: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
+                <option value="off">Off</option>
+                <option value="keep">Keep Mode</option>
+                <option value="dog">Dog Mode</option>
+                <option value="camp">Camp Mode</option>
+              </select>
+            </div>
+          )}
+
           <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Home Base Address (used for WI sales tax lookup on "No Delivery" bookings)</p>
           </div>
@@ -417,6 +454,12 @@ function EditableFieldsPanel({ vehicle, onSaved }) {
 
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Free Miles/Day</dt><dd>{vehicle.freeMilesPerDay ?? '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Tesla Enabled</dt><dd>{vehicle.teslaEnabled ? 'Yes' : 'No'}</dd></div>
+          {vehicle.teslaEnabled && (
+            <div><dt className="text-gray-400 text-xs dark:text-gray-500">Cabin Overheat Protection (post-checkout)</dt><dd className="capitalize">{{ off: 'Off', no_ac: 'On — Fan Only', on: 'On — Full A/C' }[vehicle.postEraseCabinOverheatMode || 'off']}</dd></div>
+          )}
+          {vehicle.teslaEnabled && (
+            <div><dt className="text-gray-400 text-xs dark:text-gray-500">Climate Keeper Mode (post-checkout)</dt><dd className="capitalize">{{ off: 'Off', keep: 'Keep Mode', dog: 'Dog Mode', camp: 'Camp Mode' }[vehicle.postEraseClimateKeeperMode || 'off']}</dd></div>
+          )}
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Lockbox Code</dt><dd>{vehicle.lockboxCode || '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Tesla Vehicle ID</dt><dd className="truncate">{vehicle.teslaVehicleId || '—'}</dd></div>
           <div><dt className="text-gray-400 text-xs dark:text-gray-500">Purchase Price</dt><dd>{vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '—'}</dd></div>

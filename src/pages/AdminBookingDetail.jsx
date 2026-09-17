@@ -861,7 +861,7 @@ function GuestKeyPanel({ booking, onRefresh }) {
               }
             }}
             disabled={loading}
-            title="POST /command/erase_user_data — wipes Spotify, maps, Bluetooth from car hardware"
+            title="POST /command/erase_user_data — wipes Spotify, maps, Bluetooth from car hardware. Cabin Overheat Protection / Climate Keeper are then restored per the vehicle's configured reset settings."
             className="px-3 py-1.5 bg-red-700 text-white text-sm rounded-lg hover:bg-red-800 disabled:opacity-40"
           >
             {loading ? "Working…" : "🗑 Erase Renter Data"}
