@@ -19,21 +19,19 @@ import { NavLink } from 'react-router-dom';
 // are relative to /admin — do NOT include /admin here or links will double-prefix.
 const NAV_ITEMS = [
   { to: '/',             label: 'Dashboard',    icon: '🏠', exact: true },
-  { to: '/bookings',     label: 'Bookings',     icon: '📋' },
   { to: '/calendar',     label: 'Calendar',     icon: '📅' },
+  { to: '/bookings',     label: 'Bookings',     icon: '📋' },
+  { to: '/map',          label: 'Live Map',     icon: '🗺' },
   { to: '/vehicles',     label: 'Vehicles',     icon: '🚗' },
   { to: '/maintenance',  label: 'Maintenance',  icon: '🔧' },
   { to: '/users',        label: 'Users',        icon: '👥' },
+  { to: '/turo-guests',  label: 'Turo Guests',  icon: '🚙' },
   { to: '/guest-keys',   label: 'Guest Mode',   icon: '📱' },
   { to: '/driver-keys',  label: 'Guest Keys',   icon: '🔑' },
-
-  { to: '/turo-guests',  label: 'Turo Guests',  icon: '🚙' },
-  { to: '/map',          label: 'Live Map',     icon: '🗺' },
-  { to: '/analytics',    label: 'Analytics',    icon: '📊' },
-  { to: '/expenses',     label: 'Expense Tracker', icon: '🧾' },
   { to: '/tax-rates',    label: 'Tax Rates',    icon: '🧮' },
+  { to: '/expenses',     label: 'Expense Tracker', icon: '🧾' },
   { to: '/delivery-locations', label: 'Delivery Locations', icon: '🚚' },
-
+  { to: '/analytics',    label: 'Analytics',    icon: '📊' },
   { to: '/settings',     label: 'Settings',     icon: '⚙️' },
 ];
 
