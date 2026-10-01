@@ -560,6 +560,55 @@ function ValuationPanel({ vehicle, onRefreshed }) {
   );
 }
 
+// ── Vehicle Controls Panel ───────────────────────────────────────────────────
+const VEHICLE_COMMANDS = [
+  { command: 'door_unlock',  label: '🔓 Unlock',       cls: 'bg-blue-600 text-white hover:bg-blue-700', confirm: 'Unlock the vehicle now?' },
+  { command: 'door_lock',    label: '🔒 Lock',         cls: 'bg-blue-600 text-white hover:bg-blue-700' },
+  { command: 'honk_horn',    label: '📯 Honk Horn',    cls: 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700' },
+  { command: 'flash_lights', label: '💡 Flash Lights', cls: 'border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700' },
+];
+
+function VehicleControlsPanel({ vehicle }) {
+  const api = useApi();
+  const [busy, setBusy] = useState(null);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  if (!vehicle.teslaEnabled) return null;
+
+  const send = async ({ command, confirm }) => {
+    if (confirm && !window.confirm(confirm)) return;
+    setBusy(command); setMsg(''); setErr('');
+    try {
+      const r = await api.post(`/admin/vehicles/${vehicle.vin}/command`, { command });
+      setMsg(`✓ ${r.data?.message || `${command} sent`}`);
+    } catch (e) {
+      setErr(e.response?.data?.error || e.message || `${command} failed`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Vehicle Controls</h2>
+      <p className="text-xs text-gray-400 mb-4 dark:text-gray-500">
+        Sends commands directly to the vehicle, regardless of booking status. A sleeping car may take up to ~20s to wake.
+      </p>
+      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
+      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+      <div className="flex flex-wrap gap-2">
+        {VEHICLE_COMMANDS.map(c => (
+          <button key={c.command} onClick={() => send(c)} disabled={!!busy}
+            className={`px-3 py-1.5 text-sm rounded-lg transition disabled:opacity-50 ${c.cls}`}>
+            {busy === c.command ? 'Working…' : c.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Drivers Panel ────────────────────────────────────────────────────────────
 function DriversPanel({ vehicle }) {
   const api = useApi();
@@ -1384,6 +1433,7 @@ export default function AdminVehicleDetail() {
             <PhotoGalleryPanel vin={vin} />
             <EditableFieldsPanel vehicle={vehicle} onSaved={reload} />
             <ValuationPanel vehicle={vehicle} onRefreshed={reload} />
+            <VehicleControlsPanel vehicle={vehicle} />
             <DriversPanel vehicle={vehicle} />
             <GuestKeysPanel vin={vin} />
             <MaintenanceSchedulePanel vin={vin} />
