@@ -305,6 +305,7 @@ const CONTRACT_STATUS_LABELS = {
   not_required:      { label: "Not Required",       color: "bg-gray-100 text-gray-500 dark:text-gray-400" },
   sent:              { label: "Awaiting Signature",  color: "bg-yellow-100 text-yellow-700" },
   viewed:            { label: "Viewed",              color: "bg-blue-100 text-blue-700" },
+  renter_signed:     { label: "Awaiting Owner Signature", color: "bg-yellow-100 text-yellow-700" },
   signed:            { label: "✓ Signed (e-sign)",   color: "bg-green-100 text-green-700" },
   signed_in_person:  { label: "✓ Signed (in person)", color: "bg-green-100 text-green-700" },
   declined:          { label: "Declined",            color: "bg-red-100 text-red-700" },
@@ -319,7 +320,6 @@ function ContractPanel({ booking, onRefresh }) {
   const [sendName,  setSendName]  = useState(booking.guestName || booking.turoGuestName || "");
   const [sendEmail, setSendEmail] = useState(booking.guestEmail || booking.turoGuestEmail || "");
   const [sendMsg,   setSendMsg]   = useState("");
-  const [ccAdmin,   setCcAdmin]   = useState(false);
   const [testMode,  setTestMode]  = useState(false);
   const [sending,   setSending]   = useState(false);
   const [sendResult, setSendResult] = useState("");
@@ -355,7 +355,6 @@ function ContractPanel({ booking, onRefresh }) {
         recipient_name:  sendName,
         recipient_email: sendEmail,
         message:         sendMsg || undefined,
-        cc_admin:        ccAdmin,
         test_mode:       testMode,
       });
       setSendResult(`✓ Contract sent to ${sendEmail}${testMode ? " (test mode)" : ""}`);
@@ -400,7 +399,7 @@ function ContractPanel({ booking, onRefresh }) {
   };
 
   // Issue 1: Mark-signed requires either a SignWell send OR an uploaded doc
-  const canMarkSigned = contractStatus === "sent" || docs.length > 0;
+  const canMarkSigned = ["sent", "viewed", "renter_signed"].includes(contractStatus) || docs.length > 0;
 
   const handleMarkSigned = async () => {
     if (!window.confirm("Mark this contract as signed in person? This records that the renter has physically signed the rental agreement.")) return;
@@ -452,10 +451,15 @@ function ContractPanel({ booking, onRefresh }) {
             </span>
           )}
         </div>
-        {contractStatus === "sent" && (
+        {["sent", "viewed"].includes(contractStatus) && (
           <p className="text-xs text-gray-400 mt-1.5 dark:text-gray-500">
             Awaiting signature from {booking.guestEmail || booking.turoGuestEmail || "guest"}.
             The status will update automatically when they sign.
+          </p>
+        )}
+        {contractStatus === "renter_signed" && (
+          <p className="text-xs text-amber-700 mt-1.5">
+            The renter has signed. SignWell emailed contracts@drivedobias.com for the required owner countersignature.
           </p>
         )}
       </div>
@@ -500,11 +504,6 @@ function ContractPanel({ booking, onRefresh }) {
             </div>
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={ccAdmin} onChange={e => setCcAdmin(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 dark:border-gray-600" />
-              CC me on this
-            </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={testMode} onChange={e => setTestMode(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-amber-500 dark:border-gray-600" />
@@ -720,14 +719,8 @@ function GuestKeyPanel({ booking, onRefresh }) {
     }
   }, [booking.bookingId, api, onRefresh]);
 
-  if (!isTesla) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Guest Mode</h2>
-        <p className="text-sm text-gray-400 dark:text-gray-500">Not applicable — this vehicle is not Tesla-enabled.</p>
-      </div>
-    );
-  }
+  // Irrelevant for non-Tesla vehicles — hide entirely (matches DriverKeyPanel).
+  if (!isTesla) return null;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
@@ -1440,6 +1433,7 @@ export default function AdminBookingDetail() {
   const [loading, setLoading]         = useState(true);
   const [actionMsg, setActionMsg]     = useState("");
   const [actionErr, setActionErr]     = useState("");
+  const [cancelling, setCancelling]   = useState(false);
 
   // Change Trip Dates modal (inline in Rental Info card)
   // adjMode: null | "change"
@@ -1475,18 +1469,20 @@ export default function AdminBookingDetail() {
       .catch(console.error);
   }, []);
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    Promise.all([
-      api.get(`/admin/bookings/${id}`),
-      api.get(`/admin/bookings/${id}/inspections`),
-    ])
-      .then(([bRes, iRes]) => {
-        setBooking(bRes.data);
-        setInspections(iRes.data || []);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  const reload = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const [bRes, iRes] = await Promise.all([
+        api.get(`/admin/bookings/${id}`),
+        api.get(`/admin/bookings/${id}/inspections`),
+      ]);
+      setBooking(bRes.data);
+      setInspections(iRes.data || []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      if (showSpinner) setLoading(false);
+    }
   }, [id, api]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -1496,9 +1492,23 @@ export default function AdminBookingDetail() {
     try {
       await api.post(endpoint, body);
       setActionMsg(`${label} successful.`);
-      reload();
+      await reload(false);
     } catch (e) {
       setActionErr(e.response?.data?.error || `${label} failed.`);
+    }
+  };
+
+  const cancelBooking = async () => {
+    const reason = window.prompt(
+      "Cancel this booking? Optionally enter a reason (e.g. \"Guest requested via missed cancellation email\"):",
+      ""
+    );
+    if (reason === null || cancelling) return;
+    setCancelling(true);
+    try {
+      await doAction(`/admin/bookings/${id}/cancel`, "Booking cancellation", { reason });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -1903,16 +1913,10 @@ export default function AdminBookingDetail() {
                 clears pending guest-key schedules, and reclaims any loyalty points earned.
               </p>
               <button
-                onClick={() => {
-                  const reason = window.prompt(
-                    "Cancel this booking? Optionally enter a reason (e.g. \"Guest requested via missed cancellation email\"):",
-                    ""
-                  );
-                  if (reason === null) return; // user hit Cancel on the prompt
-                  doAction(`/admin/bookings/${id}/cancel`, "Booking cancellation", { reason });
-                }}
-                className="shrink-0 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition">
-                Cancel Booking
+                onClick={cancelBooking}
+                disabled={cancelling}
+                className="shrink-0 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 transition">
+                {cancelling ? "Cancelling…" : "Cancel Booking"}
               </button>
             </div>
           </div>

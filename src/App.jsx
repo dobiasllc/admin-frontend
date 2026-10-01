@@ -25,6 +25,7 @@ import AdminDriverKeys from './pages/AdminDriverKeys';
 
 import AdminCreateBooking from './pages/AdminCreateBooking';
 import AdminPrintContract from './pages/AdminPrintContract';
+import AdminInspection from './pages/AdminInspection';
 import AdminSettings from './pages/AdminSettings';
 import AdminMaintenance from './pages/AdminMaintenance';
 
@@ -57,6 +58,12 @@ function App() {
         />
         <Route path="/bookings/:id"
           element={<AdminRoute><AdminBookingDetail /></AdminRoute>}
+        />
+        <Route path="/bookings/:id/check-in"
+          element={<AdminRoute><AdminInspection mode="check-in" /></AdminRoute>}
+        />
+        <Route path="/bookings/:id/check-out"
+          element={<AdminRoute><AdminInspection mode="check-out" /></AdminRoute>}
         />
         <Route path="/users"
           element={<AdminRoute><AdminUsers /></AdminRoute>}
