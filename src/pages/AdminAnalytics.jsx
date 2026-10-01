@@ -38,32 +38,32 @@ const TAB_STORAGE_KEY = 'adminAnalytics.tab';
 
 // ── Formula/explanation text shown in hover tooltips next to metric labels ──
 const FORMULAS = {
-  revenue: 'Sum of booking totals (confirmed/active/completed bookings starting in range) + any manual revenue adjustments.',
-  vehicleCosts: 'Maintenance performed in range + manual cost records dated in range + prorated loan interest + prorated registration + one-time TTR (if purchase date falls in range).',
-  businessExpensesYtd: 'Sum of all Expense Tracker expense records for the current calendar year (Jan 1 – today), regardless of the time range selected above.',
+  revenue: 'Booking totals excluding sales tax (confirmed/active/completed bookings starting in range) + Turo cancellation fees. Manual revenue adjustments are undated, so they are only included in "All time".',
+  vehicleCosts: 'Maintenance + manual cost records + prorated loan interest, registration and depreciation + one-time TTR (if purchased in range). Only counts time each vehicle was in the rental business.',
+  businessExpenses: 'Expense Tracker records dated in the selected range. Excludes expenses already linked to a vehicle maintenance record (counted in Vehicle Costs).',
 
-  totalOverhead: 'Vehicle Costs + Business Expenses (YTD).',
-  netProfit: 'Revenue − Vehicle Costs − Business Expenses (YTD).',
-  avgFleetUtilization: 'For each vehicle: booked days ÷ days in range × 100 (booked days are overlap-clipped to the range). Then averaged across all vehicles.',
-  avgProfitPerDay: 'For each vehicle: Net Profit ÷ days in range. Then averaged across all vehicles.',
-  idleDays: 'Days in range − booked days (overlap-clipped to the range) for that vehicle.',
+  totalOverhead: 'Vehicle Costs + Business Expenses (same range).',
+  netProfit: 'Revenue − Vehicle Costs − Business Expenses (same range).',
+  avgFleetUtilization: 'Total booked days ÷ total rentable days across the fleet × 100. Rentable days = days in range that each vehicle was in service (rental start/purchase → retirement), minus days blocked or in maintenance.',
+  avgProfitPerDay: 'Total vehicle net profit ÷ total vehicle-days in the rental business during the range (before business expenses).',
+  idleDays: 'Rentable days − booked days. Rentable days exclude time before the vehicle entered service, after retirement, and while blocked or in maintenance.',
   bookings: 'Count of bookings (confirmed/active/completed) that started within the selected range.',
-  utilizationCol: 'Booked days (overlap-clipped to range) ÷ days in range × 100.',
-  rpu: 'Total fleet revenue ÷ number of active (non-retired) vehicles.',
-  revenuePerBilledDay: 'Total fleet revenue ÷ total booked days across the fleet.',
-  avgRentalLength: 'Total booked days across the fleet ÷ total number of bookings (booking-count weighted, so vehicles with more bookings count more).',
-  revenueCol: "Sum of this vehicle's booking totals in range + manual revenue adjustment.",
-  vehicleCostsCol: 'Maintenance + manual costs + prorated loan interest + prorated registration + TTR (if applicable), all scoped to the range.',
+  utilizationCol: 'Booked days ÷ rentable days × 100. Rentable days = days in range the vehicle was in service, minus days blocked or in maintenance.',
+  rpu: 'Total fleet revenue ÷ number of vehicles in service at any point during the range.',
+  revenuePerBilledDay: 'Revenue from trips starting in range ÷ total length of those trips.',
+  avgRentalLength: 'Total length of trips starting in range ÷ number of those trips.',
+  revenueCol: "This vehicle's booking totals in range (excluding sales tax) + Turo cancellation fees. Manual adjustment is included only in \"All time\".",
+  vehicleCostsCol: 'Maintenance + manual costs + prorated loan interest, registration and depreciation + TTR (if purchased in range), all scoped to the range.',
   netProfitCol: "This vehicle's Revenue − Vehicle Costs.",
-  perBilledDay: "This vehicle's Revenue ÷ its booked days in range.",
-  rentalLengthCol: "This vehicle's booked days in range ÷ its number of bookings.",
-  perDay: "This vehicle's Net Profit ÷ days in range.",
-  milesCol: 'Odometer delta from pre-trip → post-trip inspections on completed bookings starting in range.',
+  perBilledDay: "Revenue from this vehicle's trips starting in range ÷ total length of those trips.",
+  rentalLengthCol: "Total length of this vehicle's trips starting in range ÷ number of those trips.",
+  perDay: "This vehicle's Net Profit ÷ days it was in the rental business during the range.",
+  milesCol: 'Odometer change over the range (rental-start/purchase odometer, maintenance or telemetry readings → current odometer). Falls back to pre/post-trip inspection readings.',
   perMile: "This vehicle's total cost in range ÷ miles driven in range.",
   depreciationCol: "Purchase price − latest OTDcheck estimated market value.",
-  avgOosRate: 'For each vehicle: days marked unavailable/out-of-service (overlap-clipped to range) ÷ days in range × 100. Then averaged across the fleet.',
-  avgMaintPerMile: "Fleet's maintenance cost in range ÷ miles driven in range, averaged per vehicle.",
-  oosRateCol: 'Unavailability (BLOCK#) days overlapping the range ÷ days in range × 100.',
+  avgOosRate: 'For each vehicle: days blocked or in maintenance ÷ days in service during the range × 100. Then averaged across the fleet.',
+  avgMaintPerMile: "Fleet maintenance cost in range ÷ fleet miles driven in range.",
+  oosRateCol: 'Days blocked or in maintenance ÷ days in service during the range × 100.',
   maintPerMileCol: 'Maintenance cost in range ÷ miles driven in range.',
   lifetimeMaint: 'All-time maintenance cost total, purchase-to-date (not scoped to the selected range).',
   estimatedLine: "Linear interpolation between purchase price and OTDcheck's projected 1/3/5-year depreciation values.",
@@ -577,15 +577,15 @@ export default function AdminAnalytics() {
     insights.push(`💰 A new vehicle performing at your fleet's average profit/day (${fmt$(fleet.avgProfitPerDayCents)}/day) would add roughly ${fmt$(monthlyAdd)}/month.`);
   }
   if (fleet.buyAnotherVehiclePaybackYears != null) {
-    insights.push(`🚙 Should I buy another vehicle? At your fleet's avg purchase price (${fmt$(fleet.avgPurchasePriceCents)}) and avg annual profit/vehicle (${fmt$(fleet.avgAnnualProfitPerVehicleCents)}/yr), payback would take roughly ${fleet.buyAnotherVehiclePaybackYears} year${fleet.buyAnotherVehiclePaybackYears === 1 ? '' : 's'}.`);
+    insights.push(`🚙 Should I buy another vehicle? At your fleet's avg purchase price (${fmt$(fleet.avgPurchasePriceCents)}) and avg annual operating profit/vehicle before depreciation (${fmt$(fleet.avgAnnualProfitPerVehicleCents)}/yr), payback would take roughly ${fleet.buyAnotherVehiclePaybackYears} year${fleet.buyAnotherVehiclePaybackYears === 1 ? '' : 's'}.`);
   }
 
   vehicles.forEach(v => {
     if (v.utilizationPct != null && v.utilizationPct < 20) {
       insights.push(`⚠️ ${v.name || v.vin} has low utilization (${v.utilizationPct}%) — consider adjusting pricing, marketing, or retiring it.`);
     }
-    if (v.depreciation != null && v.profitCents != null && v.depreciation > v.profitCents && v.depreciation > 0) {
-      insights.push(`🔻 ${v.name || v.vin}'s depreciation (${fmt$(v.depreciation)}) has outpaced its net profit (${fmt$(v.profitCents)}) — consider a retirement/replacement plan.`);
+    if (v.depreciation > 0 && v.lifetimeProfitCents != null && v.lifetimeProfitCents < 0) {
+      insights.push(`🔻 ${v.name || v.vin}'s depreciation has outpaced what it has earned — lifetime net profit is ${fmt$(v.lifetimeProfitCents)} after depreciation. Consider a retirement/replacement plan.`);
     }
   });
 
@@ -660,9 +660,8 @@ export default function AdminAnalytics() {
           <div>
             <strong>Limited data history:</strong> You selected "{rangeLabel}", but the system only has{' '}
             <strong>{coverageDays} day{coverageDays === 1 ? '' : 's'}</strong> of real booking history so far.
-            Metrics below (especially utilization) are computed against the full {rangeLabel.toLowerCase()} window and
-            will appear <strong>understated</strong> until more history accumulates. Consider selecting a shorter range
-            (e.g. "1 week" or "1 month") for a more representative snapshot right now.
+            Totals for this range only include what has been recorded so far. Per-vehicle utilization and $/day
+            only count days each vehicle was actually in service, so they are not understated by the missing history.
           </div>
         </div>
       )}
@@ -684,7 +683,7 @@ export default function AdminAnalytics() {
             </div>
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center dark:bg-orange-900/20">
               <div className="text-xl font-bold text-orange-700">{fmt$(fleet.totalBusinessExpenseCents)}</div>
-              <div className="text-xs text-orange-600 mt-1 flex items-center justify-center">Business Expenses (YTD) <InfoTooltip text={FORMULAS.businessExpensesYtd} /></div>
+              <div className="text-xs text-orange-600 mt-1 flex items-center justify-center">Business Expenses ({rangeLabel}) <InfoTooltip text={FORMULAS.businessExpenses} /></div>
             </div>
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center dark:bg-purple-900/20">
               <div className="text-xl font-bold text-purple-700">{fmt$(fleet.totalBusinessOverheadCents)}</div>
@@ -718,7 +717,7 @@ export default function AdminAnalytics() {
           {/* Lifetime / Net-Worth Stats — NOT range-scoped, always purchase-to-date */}
           <div className="bg-white rounded-lg border border-indigo-200 p-4 mb-8 dark:bg-gray-800 dark:border-indigo-800">
             <SectionHeader icon="🏦" title="Lifetime Totals & Net Worth"
-              subtitle="These figures are independent of the time range selector above — always purchase-to-date." />
+              subtitle="Independent of the time range selector above — covers each vehicle's whole time in the rental business. Excludes business expenses." />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-gray-50 rounded-lg p-3 text-center dark:bg-gray-900/40">
                 <div className="text-lg font-bold text-green-700">{fmt$(fleet.lifetimeRevenueCents)}</div>
@@ -921,7 +920,7 @@ export default function AdminAnalytics() {
                           </div>
                         ) : (
                           <button onClick={() => startEditRevenue(v)} className="text-xs text-gray-400 hover:text-blue-600 mt-0.5 dark:text-gray-500 dark:hover:text-blue-400">
-                            {v.manualRevenueAdjustmentCents ? `+${fmt$(v.manualRevenueAdjustmentCents)} manual` : '+ add manual revenue'}
+                            {v.manualRevenueAdjustmentCents ? `+${fmt$(v.manualRevenueAdjustmentCents)} manual (all-time only)` : '+ add manual revenue'}
                           </button>
                         )}
                       </td>
@@ -951,7 +950,7 @@ export default function AdminAnalytics() {
             </div>
             <p className="text-[11px] text-gray-400 mt-2 dark:text-gray-500">
 
-              Costs (maintenance, manual costs, loan interest, registration) and odometer miles above are scoped to the
+              Costs (maintenance, manual costs, loan interest, registration, depreciation) and odometer miles above are scoped to the
               selected range ({rangeLabel}), consistent with revenue and utilization. Lifetime totals (e.g. total loan
               interest paid to date, lifetime maintenance) are shown separately in the vehicle's cost detail panel below.
             </p>
@@ -1006,7 +1005,7 @@ export default function AdminAnalytics() {
                     </div>
                   )}
                   <p className="text-[11px] text-gray-400 mt-2 dark:text-gray-500">
-                    "Computed" categories (Loan Interest, Registration, TTR, Maintenance) are calculated automatically from
+                    "Computed" categories (Loan Interest, Registration, TTR, Maintenance, Depreciation) are calculated automatically from
                     vehicle fields / records — scoped to the selected range above — and take precedence over manually
                     entered cost records of the same category to avoid double-counting. "Lifetime" figures above are
                     always purchase-to-date regardless of the selected range.
