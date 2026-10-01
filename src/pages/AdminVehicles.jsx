@@ -3,16 +3,18 @@
  * Route: /admin/vehicles
  * Click a tile to go to /admin/vehicles/:vin for full detail/management.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
+import { FieldGroupInputs } from '../components/VehicleFields';
+import { FIELD_GROUPS, vehicleToForm, formToPayload } from '../utils/vehicleFields';
 
 const STATUS_COLORS = {
-  available:   'bg-green-100 text-green-700',
-  rented:      'bg-blue-100 text-blue-700',
-  maintenance: 'bg-yellow-100 text-yellow-700',
-  retired:     'bg-gray-100 text-gray-500 dark:text-gray-400',
+  available:   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  rented:      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  maintenance: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  retired:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
 };
 
 const STATUS_LABELS = {
@@ -22,29 +24,20 @@ const STATUS_LABELS = {
   retired:     'Retired',
 };
 
-const VEHICLE_TYPES = ['sedan', 'suv', 'truck', 'minivan', 'sports', 'coupe'];
+const SORT_OPTIONS = [
+  { value: 'name',       label: 'Name (A–Z)' },
+  { value: 'rate_desc',  label: 'Daily rate (high → low)' },
+  { value: 'rate_asc',   label: 'Daily rate (low → high)' },
+  { value: 'miles_desc', label: 'Odometer (high → low)' },
+  { value: 'year_desc',  label: 'Year (newest first)' },
+];
 
-const BLANK_VEHICLE = {
-  vin: '', make: '', model: '', year: '', licensePlate: '', color: '',
-  status: 'available', teslaEnabled: false, dailyRateCents: '',
-  defaultSource: 'private', imageUrl: '', lockboxCode: '',
-  freeMilesPerDay: '', teslaVehicleId: '', teslaAccountId: '', ownerUserId: '',
-  purchasePrice: '', purchaseDate: '',
-  rentalStartDate: '', rentalStartOdometerMiles: '',
-  loanPrincipalCents: '', loanAPR: '', loanTermMonths: '', loanStartDate: '',
-  ttrCents: '', annualRegistrationCents: '', totalOdometerMiles: '',
-  vehicleType: '', unlimitedMileageFeeCents: '', deliveryFeeCents: '',
-  prepaidEnergyFeeCents: '', imageUrls: [],
-  homeAddress: '', homeCity: '', homeState: 'WI', homeZip: '',
-};
-
-
-
+const vehicleName = v => `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim();
 
 // ── Add Vehicle Modal ────────────────────────────────────────────────────────
 function AddVehicleModal({ onClose, onSaved }) {
   const api = useApi();
-  const [form, setForm] = useState(BLANK_VEHICLE);
+  const [form, setForm] = useState(() => vehicleToForm({}));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
@@ -52,26 +45,9 @@ function AddVehicleModal({ onClose, onSaved }) {
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      const payload = {
-        ...form,
-        year: Number(form.year),
-        dailyRateCents: Number(form.dailyRateCents),
-        unlimitedMileageFeeCents: form.unlimitedMileageFeeCents === '' ? 0 : Math.round(Number(form.unlimitedMileageFeeCents) * 100),
-        deliveryFeeCents: form.deliveryFeeCents === '' ? 0 : Math.round(Number(form.deliveryFeeCents) * 100),
-        prepaidEnergyFeeCents: form.prepaidEnergyFeeCents === '' ? 0 : Math.round(Number(form.prepaidEnergyFeeCents) * 100),
-        // These are entered as dollars in the form (labels say "($)") but
-        // stored as *Cents fields — convert here, matching the fee fields
-        // above, so a value like "260.04" is stored as 26004 cents instead
-        // of the raw decimal-dollar string (which used to crash the
-        // Analytics page on read).
-        loanPrincipalCents: form.loanPrincipalCents === '' ? undefined : Math.round(Number(form.loanPrincipalCents) * 100),
-        ttrCents: form.ttrCents === '' ? undefined : Math.round(Number(form.ttrCents) * 100),
-        annualRegistrationCents: form.annualRegistrationCents === '' ? undefined : Math.round(Number(form.annualRegistrationCents) * 100),
-      };
-      await api.post('/admin/vehicles', payload);
+      await api.post('/admin/vehicles', formToPayload(form, FIELD_GROUPS, { create: true }));
       onSaved();
     } catch (e2) {
-
       setErr(e2.response?.data?.error || 'Save failed.');
     } finally {
       setSaving(false);
@@ -80,174 +56,38 @@ function AddVehicleModal({ onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto dark:bg-gray-800">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Add Vehicle</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl dark:hover:text-gray-300 dark:text-gray-300 dark:text-gray-500">×</button>
-          </div>
-
-          {err && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4 dark:bg-red-900/20">{err}</div>}
-
-          <form onSubmit={handleSave} className="grid grid-cols-2 gap-4">
-            {[
-              ['vin', 'VIN', 'text'],
-              ['make', 'Make', 'text'],
-              ['model', 'Model', 'text'],
-              ['year', 'Year', 'number'],
-              ['licensePlate', 'License Plate', 'text'],
-              ['color', 'Color', 'text'],
-              ['dailyRateCents', 'Daily Rate (cents)', 'number'],
-              ['imageUrl', 'Image URL', 'text'],
-              ['lockboxCode', 'Lockbox Code', 'text'],
-              ['freeMilesPerDay', 'Free Miles / Day', 'number'],
-              ['teslaVehicleId', 'Tesla Vehicle ID', 'text'],
-              ['teslaAccountId', 'Tesla Account ID', 'text'],
-              ['ownerUserId', 'Owner User ID (Cognito)', 'text'],
-            ].map(([key, label, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-                <input type={type} value={form[key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-              </div>
-            ))}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Status</label>
-              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-                {['available', 'rented', 'maintenance', 'retired'].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Default Source</label>
-              <select value={form.defaultSource} onChange={e => setForm(f => ({ ...f, defaultSource: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-                {['private', 'turo', 'both'].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Vehicle Type</label>
-              <select value={form.vehicleType} onChange={e => setForm(f => ({ ...f, vehicleType: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-                <option value="">— none —</option>
-                {VEHICLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Extras Pricing ($, per rental unless noted)</p>
-            </div>
-            {[
-              ['unlimitedMileageFeeCents', 'Unlimited Mileage Fee ($/day)', 'number'],
-              ['deliveryFeeCents', 'Delivery Fee ($, flat)', 'number'],
-              ['prepaidEnergyFeeCents', 'Prepaid Energy Fee ($, flat)', 'number'],
-            ].map(([key, label, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-                <input type={type} step="0.01" value={form[key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-              </div>
-            ))}
-
-            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Home Base Address (used for WI sales tax lookup on "No Delivery" bookings)</p>
-            </div>
-            {[
-              ['homeAddress', 'Street Address', 'text'],
-              ['homeCity', 'City', 'text'],
-              ['homeState', 'State', 'text'],
-              ['homeZip', 'Zip Code', 'text'],
-            ].map(([key, label, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-                <input type={type} value={form[key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-              </div>
-            ))}
-
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Additional Image URLs (one per line)</label>
-
-              <textarea rows={3} value={(form.imageUrls || []).join('\n')}
-                onChange={e => setForm(f => ({ ...f, imageUrls: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            </div>
-
-            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Acquisition Cost</p>
-
-              <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
-                Enter once at purchase. Market value is refreshed automatically each month via OTDcheck.
-              </p>
-            </div>
-            {[
-              ['purchasePrice', 'Purchase Price ($)', 'number'],
-              ['purchaseDate', 'Purchase Date', 'date'],
-              ['ttrCents', 'TTR — Tax/Title/Registration ($, one-time)', 'number'],
-              ['annualRegistrationCents', 'Annual Registration ($/yr)', 'number'],
-            ].map(([key, label, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-                <input type={type} value={form[key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-              </div>
-            ))}
-
-            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Rental Service Start (optional, recommended)</p>
-              <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">
-                When this vehicle first became available for rental (if different from purchase date), and its
-                odometer reading at that time. Improves accuracy of "All time" analytics (utilization, $/mile,
-                $/day). If left blank, purchase date and lifetime odometer are used instead.
-              </p>
-            </div>
-            {[
-              ['rentalStartDate', 'Rental Start Date', 'date'],
-              ['rentalStartOdometerMiles', 'Rental Start Odometer (mi)', 'number'],
-            ].map(([key, label, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-                <input type={type} value={form[key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-              </div>
-            ))}
-
-            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Financing (optional)</p>
-            </div>
-            {[
-              ['loanPrincipalCents', 'Loan Principal ($)', 'number'],
-              ['loanAPR', 'APR (e.g. 0.0649 for 6.49%)', 'number'],
-              ['loanTermMonths', 'Loan Term (months)', 'number'],
-              ['loanStartDate', 'Loan Start Date', 'date'],
-            ].map(([key, label, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-                <input type={type} step={key === 'loanAPR' ? '0.0001' : undefined} value={form[key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-              </div>
-            ))}
-
-            <div className="col-span-2 flex items-center gap-2">
-              <input type="checkbox" id="teslaEnabled" checked={form.teslaEnabled}
-                onChange={e => setForm(f => ({ ...f, teslaEnabled: e.target.checked }))} />
-              <label htmlFor="teslaEnabled" className="text-sm text-gray-700 dark:text-gray-300">Tesla Enabled</label>
-            </div>
-            <div className="col-span-2 flex gap-3">
-              <button type="submit" disabled={saving} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50">
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" onClick={onClose}
-                className="border border-gray-300 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">Cancel</button>
-            </div>
-          </form>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto dark:bg-gray-800">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Add Vehicle</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl dark:text-gray-500 dark:hover:text-gray-300">×</button>
         </div>
+
+        <form onSubmit={handleSave} className="p-6 space-y-6">
+          {err && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 dark:bg-red-900/20 dark:border-red-900 dark:text-red-300">{err}</div>}
+
+          {FIELD_GROUPS.map(group => (
+            <fieldset key={group.id} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0 dark:border-gray-700">
+              <legend className="sr-only">{group.title}</legend>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">{group.title}</p>
+              {group.hint && <p className="text-xs text-gray-400 mb-3 dark:text-gray-500">{group.hint}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+                <FieldGroupInputs group={group} form={form} setForm={setForm} create />
+              </div>
+              {group.footnote && <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500">{group.footnote}</p>}
+            </fieldset>
+          ))}
+
+          <div className="flex gap-3 border-t border-gray-100 pt-4 dark:border-gray-700">
+            <button type="submit" disabled={saving}
+              className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="border border-gray-300 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -261,6 +101,8 @@ export default function AdminVehicles() {
   const [msg, setMsg]             = useState('');
   const [err, setErr]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('name');
 
   const load = () => {
     setLoading(true);
@@ -271,6 +113,25 @@ export default function AdminVehicles() {
   };
 
   useEffect(load, []);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = vehicles.filter(v => {
+      if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+      if (!q) return true;
+      return `${vehicleName(v)} ${v.vin || ''} ${v.licensePlate || ''} ${v.color || ''} ${v.vehicleType || ''}`
+        .toLowerCase().includes(q);
+    });
+    return rows.sort((a, b) => {
+      switch (sortBy) {
+        case 'rate_desc':  return (b.dailyRateCents || 0) - (a.dailyRateCents || 0);
+        case 'rate_asc':   return (a.dailyRateCents || 0) - (b.dailyRateCents || 0);
+        case 'miles_desc': return (b.totalOdometerMiles || 0) - (a.totalOdometerMiles || 0);
+        case 'year_desc':  return (b.year || 0) - (a.year || 0);
+        default:           return vehicleName(a).localeCompare(vehicleName(b));
+      }
+    });
+  }, [vehicles, statusFilter, search, sortBy]);
 
   return (
     <AdminLayout>
@@ -288,7 +149,7 @@ export default function AdminVehicles() {
 
         {/* Status filter bar */}
         {!loading && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {[
               { key: 'all',         label: 'All' },
               { key: 'available',   label: 'Available' },
@@ -313,27 +174,52 @@ export default function AdminVehicles() {
                 </button>
               );
             })}
+
+            <div className="flex items-center gap-2 ml-auto">
+              <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, VIN, plate…"
+                className="w-56 border border-gray-300 rounded-lg px-3 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
           </div>
         )}
 
         {/* Vehicle tile grid */}
         {loading ? (
           <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
+        ) : visible.length === 0 ? (
+          <p className="text-sm text-gray-400 py-8 text-center dark:text-gray-500">No vehicles match the current filters.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {vehicles.filter(v => statusFilter === 'all' || v.status === statusFilter).map(v => (
+            {visible.map(v => (
               <Link key={v.vin} to={`/vehicles/${v.vin}`}
                 className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md hover:border-blue-300 transition dark:bg-gray-800 dark:border-gray-700">
                 {v.imageUrl && <img src={v.imageUrl} alt={v.model} className="w-full h-36 object-cover" />}
                 <div className="p-4">
-                  <div className="flex items-start justify-between mb-1">
-                    <div>
-                      <p className="font-semibold text-gray-800 dark:text-gray-100">{v.year} {v.make} {v.model}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{v.vin} · {v.licensePlate}</p>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 truncate dark:text-gray-100">{vehicleName(v)}</p>
+                      <p className="text-xs text-gray-400 font-mono truncate dark:text-gray-500">{v.vin}{v.licensePlate ? ` · ${v.licensePlate}` : ''}</p>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[v.status] || ''}`}>{STATUS_LABELS[v.status] || v.status}</span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[v.status] || ''}`}>{STATUS_LABELS[v.status] || v.status}</span>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">${((v.dailyRateCents || 0) / 100).toFixed(0)}/day</p>
+                  <dl className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-gray-400 dark:text-gray-500">Rate</dt>
+                      <dd className="text-gray-700 font-medium dark:text-gray-300">${((v.dailyRateCents || 0) / 100).toFixed(0)}/day</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-400 dark:text-gray-500">Odometer</dt>
+                      <dd className="text-gray-700 font-medium dark:text-gray-300">{v.totalOdometerMiles != null ? `${Number(v.totalOdometerMiles).toLocaleString()} mi` : '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-400 dark:text-gray-500">Source</dt>
+                      <dd className="text-gray-700 font-medium capitalize dark:text-gray-300">{v.defaultSource || '—'}</dd>
+                    </div>
+                  </dl>
                 </div>
               </Link>
             ))}

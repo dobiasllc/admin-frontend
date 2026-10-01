@@ -1,18 +1,24 @@
 /**
  * AdminVehicleDetail.jsx — Full detail/management page for a single vehicle.
  * Route: /admin/vehicles/:vin
+ *
+ * Organised into tabs; every editable attribute is also rendered read-only via
+ * the shared schema in utils/vehicleFields, so nothing is hidden until you
+ * click "Edit".
  */
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useApi } from '../context/AuthContext';
 import AdminLayout from '../components/AdminNav';
+import { VehicleFieldsCard } from '../components/VehicleFields';
+import { groupsByIds } from '../utils/vehicleFields';
 import { normalisePortalUrl } from '../utils/guestPortal';
 
 const STATUS_COLORS = {
-  available:   'bg-green-100 text-green-700',
-  rented:      'bg-blue-100 text-blue-700',
-  maintenance: 'bg-yellow-100 text-yellow-700',
-  retired:     'bg-gray-100 text-gray-500 dark:text-gray-400',
+  available:   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  rented:      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  maintenance: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  retired:     'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
 };
 
 const STATUS_LABELS = {
@@ -29,10 +35,10 @@ const MAINTENANCE_TYPES = [
 ];
 
 const GK_STATUS_COLORS = {
-  page_ready:          'bg-blue-100 text-blue-700',
-  guest_mode_active:   'bg-green-100 text-green-700',
-  guest_mode_disabled: 'bg-gray-100 text-gray-600 dark:text-gray-300',
-  failed:              'bg-red-200 text-red-900',
+  page_ready:          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  guest_mode_active:   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  guest_mode_disabled: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  failed:              'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-200',
 };
 
 const GK_STATUS_LABELS = {
@@ -42,13 +48,90 @@ const GK_STATUS_LABELS = {
   failed:              'Failed',
 };
 
+// Module-level so these arrays keep a stable identity across renders.
+const OVERVIEW_GROUPS  = groupsByIds(['identity', 'pricing', 'location']);
+const ACCESS_GROUPS    = groupsByIds(['access']);
+const MILEAGE_GROUPS   = groupsByIds(['odometer']);
+const FINANCIAL_GROUPS = groupsByIds(['acquisition']);
+const MEDIA_GROUPS     = groupsByIds(['media']);
+
+const TABS = [
+  { id: 'overview',    label: 'Overview' },
+  { id: 'financials',  label: 'Financials' },
+  { id: 'maintenance', label: 'Maintenance' },
+  { id: 'access',      label: 'Access & Tesla' },
+  { id: 'rentals',     label: 'Rentals' },
+  { id: 'photos',      label: 'Photos' },
+];
+
 function fmtDate(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
+function fmtDay(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
+}
 function fmtMoney(cents) {
   if (cents === undefined || cents === null) return '—';
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+// ── Shared panel shells ──────────────────────────────────────────────────────
+function Card({ title, description, action, children }) {
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+      <header className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{title}</h2>
+          {description && <p className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">{description}</p>}
+        </div>
+        {action}
+      </header>
+      <div className="p-6">{children}</div>
+    </section>
+  );
+}
+
+function Alert({ kind, children }) {
+  if (!children) return null;
+  const cls = kind === 'error'
+    ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-900 dark:text-red-300'
+    : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-900 dark:text-green-300';
+  return <div className={`mb-3 p-3 border rounded-lg text-sm ${cls}`}>{children}</div>;
+}
+
+function Empty({ children }) {
+  return <p className="text-sm text-gray-400 dark:text-gray-500">{children}</p>;
+}
+
+const MODAL_INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100';
+
+/** "Showing N of M · Show more" footer shared by every long list on this page. */
+function ShowMore({ shown, total, step, onMore, onLess }) {
+  if (total <= step) return null;
+  return (
+    <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100 dark:border-gray-700">
+      <span className="text-xs text-gray-400 dark:text-gray-500">Showing {shown} of {total}</span>
+      <div className="flex gap-3">
+        {shown > step && <button onClick={onLess} className="text-xs text-gray-500 hover:underline dark:text-gray-400">Show less</button>}
+        {shown < total && <button onClick={onMore} className="text-xs text-blue-600 hover:underline">Show {Math.min(step, total - shown)} more</button>}
+      </div>
+    </div>
+  );
+}
+
+function usePaged(total, step) {
+  const [limit, setLimit] = useState(step);
+  useEffect(() => { setLimit(step); }, [total, step]);
+  return {
+    limit,
+    pageProps: {
+      shown: Math.min(limit, total), total, step,
+      onMore: () => setLimit(l => l + step),
+      onLess: () => setLimit(step),
+    },
+  };
 }
 
 // ── Update Odometer Modal ────────────────────────────────────────────────────
@@ -98,34 +181,60 @@ function UpdateOdometerModal({ vin, currentMiles, onClose, onSaved }) {
 // ── Header Panel ─────────────────────────────────────────────────────────────
 function HeaderPanel({ vehicle, onRetire, onSaved }) {
   const [showOdometerModal, setShowOdometerModal] = useState(false);
+
+  const stats = [
+    { label: 'Daily Rate',   value: fmtMoney(vehicle.dailyRateCents) },
+    { label: 'Odometer',     value: vehicle.totalOdometerMiles != null ? `${Number(vehicle.totalOdometerMiles).toLocaleString()} mi` : '—' },
+    { label: 'Type',         value: vehicle.vehicleType || '—' },
+    { label: 'Source',       value: vehicle.defaultSource || '—' },
+    { label: 'Market Value', value: vehicle.otdcheckMarketValue ? `$${vehicle.otdcheckMarketValue.toLocaleString()}` : '—' },
+  ];
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
-      {vehicle.imageUrl && (
-        <img src={vehicle.imageUrl} alt={vehicle.model} className="w-full h-56 object-cover" />
-      )}
-      <div className="p-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{vehicle.year} {vehicle.make} {vehicle.model}</h1>
-          <p className="text-sm text-gray-400 mt-1 dark:text-gray-500">{vehicle.vin} · {vehicle.licensePlate}</p>
-          <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">
-            {vehicle.totalOdometerMiles != null ? `${Number(vehicle.totalOdometerMiles).toLocaleString()} mi` : 'No odometer reading yet'}
-            <button onClick={() => setShowOdometerModal(true)} className="ml-2 text-xs text-blue-600 hover:underline">Update Odometer</button>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[vehicle.status] || ''}`}>
-            {STATUS_LABELS[vehicle.status] || vehicle.status}
-          </span>
-          {vehicle.status !== 'retired' && (
-            <button
-              onClick={onRetire}
-              className="text-xs border border-red-300 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition dark:bg-red-900/20"
-            >
-              Retire Vehicle
-            </button>
-          )}
+      <div className="p-6 flex flex-col sm:flex-row gap-5">
+        {vehicle.imageUrl && (
+          <img src={vehicle.imageUrl} alt={vehicle.model}
+            className="w-full sm:w-48 h-32 object-cover rounded-lg border border-gray-100 shrink-0 dark:border-gray-700" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {vehicle.year} {vehicle.make} {vehicle.model}
+              </h1>
+              <p className="text-xs text-gray-400 mt-1 font-mono dark:text-gray-500">
+                {vehicle.vin}{vehicle.licensePlate ? ` · ${vehicle.licensePlate}` : ''}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[vehicle.status] || ''}`}>
+                {STATUS_LABELS[vehicle.status] || vehicle.status}
+              </span>
+              <button onClick={() => setShowOdometerModal(true)}
+                className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                Update Odometer
+              </button>
+              {vehicle.status !== 'retired' && (
+                <button onClick={onRetire}
+                  className="text-xs border border-red-300 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition dark:border-red-900 dark:hover:bg-red-900/20">
+                  Retire
+                </button>
+              )}
+            </div>
+          </div>
+
+          <dl className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {stats.map(s => (
+              <div key={s.label}>
+                <dt className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{s.label}</dt>
+                <dd className="text-sm font-medium text-gray-800 capitalize dark:text-gray-200">{s.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
+
       {showOdometerModal && (
         <UpdateOdometerModal
           vin={vehicle.vin}
@@ -157,6 +266,8 @@ function PhotoGalleryPanel({ vin }) {
 
   useEffect(load, [load]);
 
+  const { limit, pageProps } = usePaged(photos.length, 12);
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -185,307 +296,38 @@ function PhotoGalleryPanel({ vin }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Photo Gallery</h2>
-        <label className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg cursor-pointer hover:bg-blue-700 transition">
+    <Card
+      title={`Photo Gallery${photos.length ? ` (${photos.length})` : ''}`}
+      action={
+        <label className="shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg cursor-pointer hover:bg-blue-700 transition">
           {uploading ? 'Uploading…' : '+ Add Photo'}
           <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
         </label>
-      </div>
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+      }
+    >
+      <Alert kind="error">{err}</Alert>
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
+        <Empty>Loading…</Empty>
       ) : photos.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No photos uploaded yet.</p>
+        <Empty>No photos uploaded yet.</Empty>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {photos.map(p => (
-            <div key={p.s3_key} className="relative group">
-              <img src={p.url} alt={p.filename} className="w-full h-28 object-cover rounded-lg border border-gray-100 dark:border-gray-700" />
-              <button
-                onClick={() => handleDelete(p.filename)}
-                className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs opacity-0 group-hover:opacity-100 transition"
-                title="Delete photo"
-              >×</button>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {photos.slice(0, limit).map(p => (
+              <div key={p.s3_key} className="relative group">
+                <img src={p.url} alt={p.filename} className="w-full h-28 object-cover rounded-lg border border-gray-100 dark:border-gray-700" />
+                <button
+                  onClick={() => handleDelete(p.filename)}
+                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs opacity-0 group-hover:opacity-100 transition"
+                  title="Delete photo"
+                >×</button>
+              </div>
+            ))}
+          </div>
+          <ShowMore {...pageProps} />
+        </>
       )}
-    </div>
-  );
-}
-
-// ── Editable Fields Panel ────────────────────────────────────────────────────
-const VEHICLE_TYPES = ['sedan', 'suv', 'truck', 'minivan', 'sports', 'coupe'];
-
-function EditableFieldsPanel({ vehicle, onSaved }) {
-
-  const api = useApi();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(vehicle);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-  const [msg, setMsg] = useState('');
-
-  // loanPrincipalCents/ttrCents/annualRegistrationCents are stored in cents
-  // but edited as dollars (labels say "($)") — convert to dollars for display
-  // here; handleSave converts back to cents on submit. Without this, editing
-  // an existing vehicle would show the raw cents value in a dollar-labeled
-  // field and re-saving it would multiply by 100 again.
-  useEffect(() => {
-    setForm({
-      ...vehicle,
-      loanPrincipalCents: vehicle?.loanPrincipalCents != null ? vehicle.loanPrincipalCents / 100 : '',
-      ttrCents: vehicle?.ttrCents != null ? vehicle.ttrCents / 100 : '',
-      annualRegistrationCents: vehicle?.annualRegistrationCents != null ? vehicle.annualRegistrationCents / 100 : '',
-    });
-  }, [vehicle]);
-
-  const fields = [
-    ['make', 'Make', 'text'],
-    ['model', 'Model', 'text'],
-    ['year', 'Year', 'number'],
-    ['licensePlate', 'License Plate', 'text'],
-    ['color', 'Color', 'text'],
-    ['dailyRateCents', 'Daily Rate (cents)', 'number'],
-    ['imageUrl', 'Image URL', 'text'],
-    ['lockboxCode', 'Lockbox Code', 'text'],
-    ['freeMilesPerDay', 'Free Miles / Day', 'number'],
-    ['teslaVehicleId', 'Tesla Vehicle ID', 'text'],
-    ['teslaAccountId', 'Tesla Account ID', 'text'],
-    ['ownerUserId', 'Owner User ID (Cognito)', 'text'],
-    ['purchasePrice', 'Purchase Price ($)', 'number'],
-    ['purchaseDate', 'Purchase Date', 'date'],
-    ['ttrCents', 'TTR — Tax/Title/Registration ($, one-time)', 'number'],
-    ['annualRegistrationCents', 'Annual Registration ($/yr)', 'number'],
-    ['totalOdometerMiles', 'Odometer (mi)', 'number'],
-    ['purchaseOdometerMiles', '⚠️ Purchase Odometer (mi) — used for $/mile calcs, edit only to correct errors', 'number'],
-    ['loanPrincipalCents', 'Loan Principal ($)', 'number'],
-
-
-    ['loanAPR', 'APR (e.g. 0.0649 for 6.49%)', 'number'],
-    ['loanTermMonths', 'Loan Term (months)', 'number'],
-    ['loanStartDate', 'Loan Start Date', 'date'],
-  ];
-
-  const homeAddressFields = [
-    ['homeAddress', 'Home Address', 'text'],
-    ['homeCity', 'Home City', 'text'],
-    ['homeState', 'Home State', 'text'],
-    ['homeZip', 'Home Zip', 'text'],
-  ];
-
-
-  const handleSave = async () => {
-    setSaving(true); setErr(''); setMsg('');
-    try {
-      const payload = {
-        ...form,
-        year: Number(form.year),
-        dailyRateCents: Number(form.dailyRateCents),
-        unlimitedMileageFeeCents: form.unlimitedMileageFeeCents === '' || form.unlimitedMileageFeeCents == null ? 0 : Math.round(Number(form.unlimitedMileageFeeCents) * 100),
-        deliveryFeeCents: form.deliveryFeeCents === '' || form.deliveryFeeCents == null ? 0 : Math.round(Number(form.deliveryFeeCents) * 100),
-        prepaidEnergyFeeCents: form.prepaidEnergyFeeCents === '' || form.prepaidEnergyFeeCents == null ? 0 : Math.round(Number(form.prepaidEnergyFeeCents) * 100),
-        // These are entered as dollars in the form (labels say "($)") but
-        // stored as *Cents fields — convert here, matching the fee fields
-        // above, so a value like "260.04" is stored as 26004 cents instead
-        // of the raw decimal-dollar string (which used to crash the
-        // Analytics page on read).
-        loanPrincipalCents: form.loanPrincipalCents === '' || form.loanPrincipalCents == null ? undefined : Math.round(Number(form.loanPrincipalCents) * 100),
-        ttrCents: form.ttrCents === '' || form.ttrCents == null ? undefined : Math.round(Number(form.ttrCents) * 100),
-        annualRegistrationCents: form.annualRegistrationCents === '' || form.annualRegistrationCents == null ? undefined : Math.round(Number(form.annualRegistrationCents) * 100),
-      };
-      await api.put(`/admin/vehicles/${vehicle.vin}`, payload);
-
-      setMsg('Vehicle updated.');
-      setEditing(false);
-      onSaved();
-    } catch (e) {
-      setErr(e.response?.data?.error || 'Save failed.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Vehicle Details</h2>
-        {!editing ? (
-          <button onClick={() => setEditing(true)} className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">Edit</button>
-        ) : (
-          <div className="flex gap-2">
-            <button onClick={() => { setEditing(false); setForm({
-              ...vehicle,
-              loanPrincipalCents: vehicle?.loanPrincipalCents != null ? vehicle.loanPrincipalCents / 100 : '',
-              ttrCents: vehicle?.ttrCents != null ? vehicle.ttrCents / 100 : '',
-              annualRegistrationCents: vehicle?.annualRegistrationCents != null ? vehicle.annualRegistrationCents / 100 : '',
-            }); }} className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
-          </div>
-        )}
-      </div>
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
-
-      {editing ? (
-        <div className="grid grid-cols-2 gap-4">
-          {fields.map(([key, label, type]) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-              <input type={type} value={form[key] ?? ''}
-                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            </div>
-          ))}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Status</label>
-            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-              {['available', 'rented', 'maintenance', 'retired'].map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Default Source</label>
-            <select value={form.defaultSource} onChange={e => setForm(f => ({ ...f, defaultSource: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-              {['private', 'turo', 'both'].map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Vehicle Type</label>
-            <select value={form.vehicleType || ''} onChange={e => setForm(f => ({ ...f, vehicleType: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-              <option value="">— none —</option>
-              {VEHICLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-
-          <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Extras Pricing ($)</p>
-          </div>
-          {[
-            ['unlimitedMileageFeeCents', 'Unlimited Mileage Fee ($/day)'],
-            ['deliveryFeeCents', 'Delivery Fee ($, flat)'],
-            ['prepaidEnergyFeeCents', 'Prepaid Energy Fee ($, flat)'],
-          ].map(([key, label]) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-              <input type="number" step="0.01"
-                value={form[key] === 0 || form[key] ? (typeof form[key] === 'number' ? form[key] / 100 : form[key]) : ''}
-                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            </div>
-          ))}
-
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Additional Image URLs (one per line)</label>
-            <textarea rows={3} value={(form.imageUrls || []).join('\n')}
-              onChange={e => setForm(f => ({ ...f, imageUrls: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-          </div>
-
-          <div className="col-span-2 flex items-center gap-2">
-            <input type="checkbox" id="teslaEnabled" checked={!!form.teslaEnabled}
-              onChange={e => setForm(f => ({ ...f, teslaEnabled: e.target.checked }))} />
-            <label htmlFor="teslaEnabled" className="text-sm text-gray-700 dark:text-gray-300">Tesla Enabled</label>
-          </div>
-
-          {form.teslaEnabled && (
-            <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Post-Checkout Reset Behavior</p>
-              <p className="text-xs text-gray-500 mb-2 dark:text-gray-400">
-                Tesla's "erase user data" checkout process resets several vehicle settings to factory
-                defaults. These two are automatically restored to your chosen value right after each erase.
-                (Temperature display units and locally-cached driver profiles have no Tesla API command
-                to restore, so they can't be toggled here.)
-              </p>
-            </div>
-          )}
-          {form.teslaEnabled && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Cabin Overheat Protection</label>
-              <select value={form.postEraseCabinOverheatMode || 'off'}
-                onChange={e => setForm(f => ({ ...f, postEraseCabinOverheatMode: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-                <option value="off">Off (saves battery while parked)</option>
-                <option value="no_ac">On — Fan Only</option>
-                <option value="on">On — Full A/C</option>
-              </select>
-            </div>
-          )}
-          {form.teslaEnabled && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">Climate Keeper Mode</label>
-              <select value={form.postEraseClimateKeeperMode || 'off'}
-                onChange={e => setForm(f => ({ ...f, postEraseClimateKeeperMode: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-                <option value="off">Off</option>
-                <option value="keep">Keep Mode</option>
-                <option value="dog">Dog Mode</option>
-                <option value="camp">Camp Mode</option>
-              </select>
-            </div>
-          )}
-
-          <div className="col-span-2 border-t border-gray-100 pt-3 mt-1 dark:border-gray-700">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 dark:text-gray-500">Home Base Address (used for WI sales tax lookup on "No Delivery" bookings)</p>
-          </div>
-          {homeAddressFields.map(([key, label, type]) => (
-            <div key={key}>
-              <label className="block text-xs font-medium text-gray-600 mb-1 dark:text-gray-300">{label}</label>
-              <input type={type} value={form[key] ?? ''}
-                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            </div>
-          ))}
-        </div>
-      ) : (
-
-        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Color</dt><dd>{vehicle.color || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Daily Rate</dt><dd>{fmtMoney(vehicle.dailyRateCents)}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Default Source</dt><dd className="capitalize">{vehicle.defaultSource || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Vehicle Type</dt><dd className="capitalize">{vehicle.vehicleType || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Unlimited Mileage Fee</dt><dd>{fmtMoney(vehicle.unlimitedMileageFeeCents)}/day</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Delivery Fee</dt><dd>{fmtMoney(vehicle.deliveryFeeCents)}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Prepaid Energy Fee</dt><dd>{fmtMoney(vehicle.prepaidEnergyFeeCents)}</dd></div>
-
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Free Miles/Day</dt><dd>{vehicle.freeMilesPerDay ?? '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Tesla Enabled</dt><dd>{vehicle.teslaEnabled ? 'Yes' : 'No'}</dd></div>
-          {vehicle.teslaEnabled && (
-            <div><dt className="text-gray-400 text-xs dark:text-gray-500">Cabin Overheat Protection (post-checkout)</dt><dd className="capitalize">{{ off: 'Off', no_ac: 'On — Fan Only', on: 'On — Full A/C' }[vehicle.postEraseCabinOverheatMode || 'off']}</dd></div>
-          )}
-          {vehicle.teslaEnabled && (
-            <div><dt className="text-gray-400 text-xs dark:text-gray-500">Climate Keeper Mode (post-checkout)</dt><dd className="capitalize">{{ off: 'Off', keep: 'Keep Mode', dog: 'Dog Mode', camp: 'Camp Mode' }[vehicle.postEraseClimateKeeperMode || 'off']}</dd></div>
-          )}
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Lockbox Code</dt><dd>{vehicle.lockboxCode || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Tesla Vehicle ID</dt><dd className="truncate">{vehicle.teslaVehicleId || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Purchase Price</dt><dd>{vehicle.purchasePrice ? `$${Number(vehicle.purchasePrice).toLocaleString()}` : '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Purchase Date</dt><dd>{vehicle.purchaseDate || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan Principal</dt><dd>{vehicle.loanPrincipalCents ? fmtMoney(vehicle.loanPrincipalCents) : '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Loan APR</dt><dd>{vehicle.loanAPR || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Annual Registration</dt><dd>{vehicle.annualRegistrationCents ? fmtMoney(vehicle.annualRegistrationCents) : '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Home Address</dt><dd>{vehicle.homeAddress || '—'}</dd></div>
-          <div><dt className="text-gray-400 text-xs dark:text-gray-500">Home City/State/Zip</dt><dd>{[vehicle.homeCity, vehicle.homeState, vehicle.homeZip].filter(Boolean).join(', ') || '—'}</dd></div>
-          <div>
-            <dt className="text-gray-400 text-xs dark:text-gray-500">Odometer</dt>
-
-            <dd>
-              {vehicle.totalOdometerMiles != null ? `${Number(vehicle.totalOdometerMiles).toLocaleString()} mi` : '—'}
-              {vehicle.odometerSource && (
-                <span className="text-gray-400 text-xs ml-1 dark:text-gray-500">
-                  ({vehicle.odometerSource === 'tesla_telemetry' ? 'Tesla' : vehicle.odometerSource === 'maintenance_log' ? 'maintenance log' : 'manual'}
-                  {vehicle.odometerUpdatedAt ? `, ${fmtDate(vehicle.odometerUpdatedAt)}` : ''})
-                </span>
-              )}
-            </dd>
-          </div>
-        </dl>
-
-      )}
-    </div>
+    </Card>
   );
 }
 
@@ -510,53 +352,56 @@ function ValuationPanel({ vehicle, onRefreshed }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">📊 OTDcheck Valuation</h2>
+    <Card
+      title="Market Valuation"
+      description="Auto-refreshed monthly via OTDcheck."
+      action={
         <button onClick={handleRefresh} disabled={refreshing}
-          className="text-xs border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition disabled:opacity-50">
-          {refreshing ? '⏳ Refreshing…' : 'Refresh Value'}
+          className="shrink-0 text-xs border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-900/20">
+          {refreshing ? 'Refreshing…' : 'Refresh Value'}
         </button>
-      </div>
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+      }
+    >
+      <Alert kind="success">{msg}</Alert>
+      <Alert kind="error">{err}</Alert>
 
       {(vehicle.otdcheckMarketValue || vehicle.otdcheckLastRefreshed) ? (
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3 text-sm space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-indigo-700">Market Value</span>
-            {vehicle.otdcheckRecallCount > 0 && (
-              <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-medium">
-                {vehicle.otdcheckRecallCount} recall{vehicle.otdcheckRecallCount > 1 ? 's' : ''}
-              </span>
+        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div>
+            <dt className="text-gray-400 text-xs dark:text-gray-500">Market Value</dt>
+            <dd className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              {vehicle.otdcheckMarketValue ? `$${vehicle.otdcheckMarketValue.toLocaleString()}` : '—'}
+            </dd>
+            {vehicle.otdcheckMarketValueSource && vehicle.otdcheckMarketValueSource !== 'fair_price' && (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                {vehicle.otdcheckMarketValueSource === 'listing' ? 'listing price'
+                  : vehicle.otdcheckMarketValueSource === 'wholesale' ? 'wholesale est.' : 'depreciation est.'}
+              </p>
             )}
           </div>
-          {vehicle.otdcheckMarketValue && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-indigo-900 font-bold text-lg">${vehicle.otdcheckMarketValue.toLocaleString()}</span>
-              {vehicle.otdcheckMarketValueSource && vehicle.otdcheckMarketValueSource !== 'fair_price' && (
-                <span className="text-indigo-400 text-xs">
-                  ({vehicle.otdcheckMarketValueSource === 'listing' ? 'listing price' :
-                    vehicle.otdcheckMarketValueSource === 'wholesale' ? 'wholesale est.' : 'depreciation est.'})
-                </span>
-              )}
-            </div>
-          )}
-          {vehicle.otdcheckRetailMin && vehicle.otdcheckRetailMax && (
-            <div className="text-indigo-600 text-xs">
-              Retail range: ${vehicle.otdcheckRetailMin.toLocaleString()} – ${vehicle.otdcheckRetailMax.toLocaleString()}
-            </div>
-          )}
-          {vehicle.otdcheckLastRefreshed && (
-            <div className="text-indigo-400 text-xs">Refreshed: {fmtDate(vehicle.otdcheckLastRefreshed)}</div>
-          )}
-        </div>
+          <div>
+            <dt className="text-gray-400 text-xs dark:text-gray-500">Retail Range</dt>
+            <dd className="text-gray-800 dark:text-gray-200">
+              {vehicle.otdcheckRetailMin && vehicle.otdcheckRetailMax
+                ? `$${vehicle.otdcheckRetailMin.toLocaleString()} – $${vehicle.otdcheckRetailMax.toLocaleString()}`
+                : '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-400 text-xs dark:text-gray-500">Open Recalls</dt>
+            <dd className={vehicle.otdcheckRecallCount > 0 ? 'font-medium text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}>
+              {vehicle.otdcheckRecallCount ?? 0}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-gray-400 text-xs dark:text-gray-500">Last Refreshed</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{fmtDate(vehicle.otdcheckLastRefreshed)}</dd>
+          </div>
+        </dl>
       ) : (
-        <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-400 dark:bg-gray-900/40 dark:text-gray-500 dark:border-gray-700">
-          No valuation data yet — auto-refreshes monthly via OTDcheck.
-        </div>
+        <Empty>No valuation data yet — auto-refreshes monthly via OTDcheck.</Empty>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -590,13 +435,10 @@ function VehicleControlsPanel({ vehicle }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Vehicle Controls</h2>
-      <p className="text-xs text-gray-400 mb-4 dark:text-gray-500">
-        Sends commands directly to the vehicle, regardless of booking status. A sleeping car may take up to ~20s to wake.
-      </p>
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+    <Card title="Vehicle Controls"
+      description="Sent directly to the vehicle regardless of booking status. A sleeping car may take ~20s to wake.">
+      <Alert kind="success">{msg}</Alert>
+      <Alert kind="error">{err}</Alert>
       <div className="flex flex-wrap gap-2">
         {VEHICLE_COMMANDS.map(c => (
           <button key={c.command} onClick={() => send(c)} disabled={!!busy}
@@ -605,7 +447,7 @@ function VehicleControlsPanel({ vehicle }) {
           </button>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -618,14 +460,16 @@ function DriversPanel({ vehicle }) {
   const [msg, setMsg] = useState('');
   const [revoking, setRevoking] = useState(false);
 
+  const teslaEnabled = !!vehicle.teslaEnabled;
+
   const load = useCallback(() => {
-    if (!vehicle.teslaEnabled) { setLoading(false); return; }
+    if (!teslaEnabled) { setLoading(false); return; }
     setLoading(true);
     api.get(`/admin/vehicles/${vehicle.vin}/drivers`)
       .then(r => setDrivers(r.data?.drivers || []))
       .catch(e => setErr(e.response?.data?.error || 'Failed to load drivers'))
       .finally(() => setLoading(false));
-  }, [api, vehicle.vin, vehicle.teslaEnabled]);
+  }, [api, vehicle.vin, teslaEnabled]);
 
   useEffect(load, [load]);
 
@@ -643,30 +487,26 @@ function DriversPanel({ vehicle }) {
     }
   };
 
-  if (!vehicle.teslaEnabled) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Drivers</h2>
-        <p className="text-sm text-gray-400 dark:text-gray-500">Not applicable — this vehicle is not Tesla-enabled.</p>
-      </div>
-    );
+  if (!teslaEnabled) {
+    return <Card title="Drivers"><Empty>Not applicable — this vehicle is not Tesla-enabled.</Empty></Card>;
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Drivers ({drivers.length})</h2>
+    <Card
+      title={`Drivers (${drivers.length})`}
+      action={
         <button onClick={handleRevoke} disabled={revoking}
-          className="text-xs border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition disabled:opacity-50 dark:bg-purple-900/20">
+          className="shrink-0 text-xs border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition disabled:opacity-50 dark:border-purple-800 dark:text-purple-300 dark:hover:bg-purple-900/20">
           🔑 Revoke Drivers
         </button>
-      </div>
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+      }
+    >
+      <Alert kind="success">{msg}</Alert>
+      <Alert kind="error">{err}</Alert>
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
+        <Empty>Loading…</Empty>
       ) : drivers.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No drivers currently listed.</p>
+        <Empty>No drivers currently listed.</Empty>
       ) : (
         <ul className="space-y-2 text-sm">
           {drivers.map((d, i) => (
@@ -676,11 +516,90 @@ function DriversPanel({ vehicle }) {
           ))}
         </ul>
       )}
-    </div>
+    </Card>
   );
 }
 
 // ── Guest Mode & Guest Keys Panel ────────────────────────────────────────────
+function GuestKeyRow({ k, acting, onAction }) {
+  const [open, setOpen] = useState(false);
+  const portalUrl = normalisePortalUrl(k.guestAccessUrl || k.guestKeyLink);
+
+  const guestName  = k.guestName || k.turoGuestName || '';
+  const guestEmail = k.guestEmail || k.turoGuestEmail || '';
+  const createdAt  = k.guestKeyCreatedAt || k.guestAccessCreatedAt || k.createdAt;
+  const enabledAt  = k.guestModeEnabledAt || k.guestKeyActivatedAt;
+  const disabledAt = k.guestModeDisabledAt || k.guestKeyRevokedAt;
+  const erasedAt   = k.eraseUserDataAt;
+  const eraseLabel = erasedAt
+    ? `✓ ${fmtDate(erasedAt)}`
+    : (k.eraseUserDataStatus || 'Not run');
+  const driversRevokedAt = k.driversRevokedAt;
+  const driversLabel = driversRevokedAt
+    ? `✓ ${fmtDate(driversRevokedAt)}`
+    : k.driversRevokedStatus === 'failed'
+      ? 'Failed'
+      : k.guestKeyRevokeAt
+        ? `Scheduled ${fmtDate(k.guestKeyRevokeAt)}`
+        : 'Not run';
+
+  return (
+    <div className="border border-gray-100 rounded-lg dark:border-gray-700">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-800 truncate dark:text-gray-200">
+            {guestName || guestEmail || 'Guest'}
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{fmtDay(k.startTime)} → {fmtDay(k.endTime)}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${GK_STATUS_COLORS[k.guestKeyStatus] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+            {GK_STATUS_LABELS[k.guestKeyStatus] || k.guestKeyStatus || '—'}
+          </span>
+          <span className="text-gray-400 text-xs">{open ? '▾' : '▸'}</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+          <p className="text-xs mb-2">
+            <Link to={`/bookings/${k.bookingId}`} className="text-blue-600 hover:underline font-mono">{k.bookingId}</Link>
+          </p>
+          {guestEmail && (
+            <p className="text-xs text-gray-400 mb-2 dark:text-gray-500">{guestEmail}</p>
+          )}
+          <dl className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3 dark:text-gray-400">
+            <div>Portal Created: {fmtDate(createdAt)}</div>
+            <div>Guest Mode Enabled: {fmtDate(enabledAt)}</div>
+            <div>Guest Mode Disabled: {fmtDate(disabledAt)}</div>
+            <div>Driver Access Removed: {driversLabel}</div>
+            <div>Erase Data: {eraseLabel}</div>
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            {portalUrl && (
+              <a href={portalUrl} target="_blank" rel="noopener noreferrer"
+                className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition">Open Portal ↗</a>
+            )}
+            <button disabled={acting}
+              onClick={() => window.confirm('Enable Guest Mode now?') && onAction(k.bookingId, 'enable-guest-mode')}
+              className="text-xs border border-green-300 text-green-700 px-2 py-1 rounded hover:bg-green-50 transition disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/20">Enable</button>
+            <button disabled={acting}
+              onClick={() => window.confirm('Disable Guest Mode now?') && onAction(k.bookingId, 'disable-guest-mode')}
+              className="text-xs border border-orange-300 text-orange-700 px-2 py-1 rounded hover:bg-orange-50 transition disabled:opacity-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-900/20">Disable</button>
+            <button disabled={acting}
+              onClick={() => window.confirm('Remove all guest driver access from this vehicle?') && onAction(k.bookingId, 'revoke-drivers')}
+              className="text-xs border border-purple-300 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition disabled:opacity-50 dark:border-purple-800 dark:text-purple-300 dark:hover:bg-purple-900/20">Remove Driver Access</button>
+            <button disabled={acting}
+              onClick={() => window.confirm('Erase renter data from vehicle?') && onAction(k.bookingId, 'erase-user-data')}
+              className="text-xs border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50 transition disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/20">Erase Data</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GuestKeysPanel({ vin }) {
   const api = useApi();
   const [keys, setKeys] = useState([]);
@@ -703,7 +622,7 @@ function GuestKeysPanel({ vin }) {
     setActingId(bookingId); setMsg(''); setErr('');
     try {
       await api.post(`/admin/guest-keys/${bookingId}/${action}`);
-      setMsg(`✓ ${action} completed`);
+      setMsg(`✓ ${action.replace(/-/g, ' ')} completed`);
       load();
     } catch (e) {
       setErr(e.response?.data?.error || `${action} failed`);
@@ -712,92 +631,54 @@ function GuestKeysPanel({ vin }) {
     }
   };
 
-  const now = new Date();
-  const upcoming = keys.filter(k => k.startTime && new Date(k.startTime) >= now);
+  const { upcoming, past } = useMemo(() => {
+    const now = Date.now();
+    const started = k => (k.startTime ? new Date(k.startTime).getTime() : 0);
+    return {
+      upcoming: keys.filter(k => started(k) >= now).sort((a, b) => started(a) - started(b)),
+      past:     keys.filter(k => started(k) < now).sort((a, b) => started(b) - started(a)),
+    };
+  }, [keys]);
 
+  const { limit, pageProps } = usePaged(past.length, 5);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Guest Mode History</h2>
-      <p className="text-xs text-gray-400 mb-4 -mt-2 dark:text-gray-500">
-        Bluetooth pairing windows for renters. Looking for Tesla driver invite links instead?{" "}
-        <Link to="/driver-keys" className="text-blue-600 hover:underline">Go to Guest Keys →</Link>
-      </p>
-
-      {msg && <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 dark:bg-green-900/20">{msg}</div>}
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+    <Card
+      title="Guest Mode History"
+      description={<>Bluetooth pairing windows for renters. Looking for Tesla driver invite links? <Link to="/driver-keys" className="text-blue-600 hover:underline">Go to Guest Keys →</Link></>}
+    >
+      <Alert kind="success">{msg}</Alert>
+      <Alert kind="error">{err}</Alert>
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
+        <Empty>Loading…</Empty>
       ) : keys.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No guest keys for this vehicle.</p>
+        <Empty>No guest keys for this vehicle.</Empty>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {upcoming.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase mb-2 dark:text-gray-500">Upcoming Schedule</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase mb-2 dark:text-gray-500">Upcoming ({upcoming.length})</p>
               <div className="space-y-2">
                 {upcoming.map(k => (
-                  <div key={k.bookingId} className="border border-gray-100 rounded-lg p-3 text-sm flex items-center justify-between dark:border-gray-700">
-                    <div>
-                      <p className="font-medium">
-                        <Link to={`/bookings/${k.bookingId}`} className="text-blue-600 hover:underline">{k.bookingId}</Link>
-                        {' '}— {k.guestName || k.guestEmail || 'Guest'}
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{fmtDate(k.startTime)} → {fmtDate(k.endTime)}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${GK_STATUS_COLORS[k.guestKeyStatus] || 'bg-gray-100 text-gray-600 dark:text-gray-300'}`}>
-                      {GK_STATUS_LABELS[k.guestKeyStatus] || k.guestKeyStatus || '—'}
-                    </span>
-                  </div>
+                  <GuestKeyRow key={k.bookingId} k={k} acting={actingId === k.bookingId} onAction={callAction} />
                 ))}
               </div>
             </div>
           )}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase mb-2 dark:text-gray-500">All Guest Mode Events</p>
-            <div className="space-y-2">
-              {keys.map(k => {
-                const portalUrl = normalisePortalUrl(k.guestAccessUrl || k.guestKeyLink);
-                return (
-                  <div key={k.bookingId} className="border border-gray-100 rounded-lg p-3 text-sm dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="font-medium">
-                        <Link to={`/bookings/${k.bookingId}`} className="text-blue-600 hover:underline">{k.bookingId}</Link>
-                        {' '}— {k.guestName || k.guestEmail || 'Guest'}
-                      </p>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${GK_STATUS_COLORS[k.guestKeyStatus] || 'bg-gray-100 text-gray-600 dark:text-gray-300'}`}>
-                        {GK_STATUS_LABELS[k.guestKeyStatus] || k.guestKeyStatus || '—'}
-                      </span>
-                    </div>
-                    <dl className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-2 dark:text-gray-400">
-                      <div>Created: {fmtDate(k.guestKeyCreatedAt)}</div>
-                      <div>Enabled: {fmtDate(k.guestModeEnabledAt || k.guestKeyActivatedAt)}</div>
-                      <div>Disabled: {fmtDate(k.guestModeDisabledAt || k.guestKeyRevokedAt)}</div>
-                      <div>Erase Data: {k.eraseUserDataStatus === 'erased' ? `✓ ${fmtDate(k.eraseUserDataAt)}` : (k.eraseUserDataStatus || '—')}</div>
-                    </dl>
-                    <div className="flex flex-wrap gap-2">
-                      {portalUrl && (
-                        <a href={portalUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition">Open Portal ↗</a>
-                      )}
-                      <button disabled={actingId === k.bookingId}
-                        onClick={() => window.confirm('Enable Guest Mode now?') && callAction(k.bookingId, 'enable-guest-mode')}
-                        className="text-xs border border-green-300 text-green-700 px-2 py-1 rounded hover:bg-green-50 transition disabled:opacity-50 dark:bg-green-900/20">Enable</button>
-                      <button disabled={actingId === k.bookingId}
-                        onClick={() => window.confirm('Disable Guest Mode now?') && callAction(k.bookingId, 'disable-guest-mode')}
-                        className="text-xs border border-orange-300 text-orange-700 px-2 py-1 rounded hover:bg-orange-50 transition disabled:opacity-50">Disable</button>
-                      <button disabled={actingId === k.bookingId}
-                        onClick={() => window.confirm('Erase renter data from vehicle?') && callAction(k.bookingId, 'erase-user-data')}
-                        className="text-xs border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50 transition disabled:opacity-50 dark:bg-red-900/20">Erase Data</button>
-                    </div>
-                  </div>
-                );
-              })}
+          {past.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase mb-2 dark:text-gray-500">Past ({past.length})</p>
+              <div className="space-y-2">
+                {past.slice(0, limit).map(k => (
+                  <GuestKeyRow key={k.bookingId} k={k} acting={actingId === k.bookingId} onAction={callAction} />
+                ))}
+              </div>
+              <ShowMore {...pageProps} />
             </div>
-          </div>
+          )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -989,6 +870,7 @@ function MaintenanceSchedulePanel({ vin }) {
   const [showAddCustom, setShowAddCustom] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
   const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1002,12 +884,21 @@ function MaintenanceSchedulePanel({ vin }) {
 
   const order = { red: 0, yellow: 1, green: 2, gray: 3 };
   const activeRows = [...items].filter(i => i.active !== false).sort((a, b) => (order[a.status] ?? 4) - (order[b.status] ?? 4));
+  const visibleRows = statusFilter === 'all' ? activeRows : activeRows.filter(i => i.status === statusFilter);
   const inactiveRows = items.filter(i => i.active === false);
   const inactiveByCategory = inactiveRows.reduce((acc, i) => {
     const cat = i.category || 'Other';
     (acc[cat] = acc[cat] || []).push(i);
     return acc;
   }, {});
+
+  const counts = {
+    all:    activeRows.length,
+    red:    activeRows.filter(i => i.status === 'red').length,
+    yellow: activeRows.filter(i => i.status === 'yellow').length,
+    green:  activeRows.filter(i => i.status === 'green').length,
+    gray:   activeRows.filter(i => i.status === 'gray').length,
+  };
 
   const toggleCategory = (cat) => setExpandedCategories(s => ({ ...s, [cat]: !s[cat] }));
 
@@ -1031,53 +922,73 @@ function MaintenanceSchedulePanel({ vin }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Maintenance Schedule</h2>
-        <button onClick={() => setShowAddCustom(true)} className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:hover:bg-gray-700 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600">
+    <Card
+      title="Maintenance Schedule"
+      action={
+        <button onClick={() => setShowAddCustom(true)}
+          className="shrink-0 text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
           + Add Custom Item
         </button>
-      </div>
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+      }
+    >
+      <Alert kind="error">{err}</Alert>
+
+      {activeRows.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {[['all', 'All'], ['red', 'Overdue'], ['yellow', 'Due Soon'], ['green', 'OK'], ['gray', 'As Needed']].map(([key, label]) => (
+            <button key={key} onClick={() => setStatusFilter(key)} disabled={key !== 'all' && counts[key] === 0}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition disabled:opacity-40 ${
+                statusFilter === key
+                  ? 'bg-gray-800 text-white border-gray-800 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'
+              }`}>
+              {label} <span className="opacity-60">{counts[key]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
+        <Empty>Loading…</Empty>
       ) : activeRows.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No items being tracked yet — see suggestions below.</p>
+        <Empty>No items being tracked yet — see suggestions below.</Empty>
+      ) : visibleRows.length === 0 ? (
+        <Empty>No items match this filter.</Empty>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-gray-200 dark:border-gray-700">
               <tr>
-                {['Status', 'Item', 'Last Performed', 'Due', 'Total Cost', 'Actions'].map(h => (
-                  <th key={h} className="px-2 py-2 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap dark:text-gray-400">{h}</th>
+                {['Status', 'Item', 'Last Performed', 'Due', 'Total Cost', ''].map((h, i) => (
+                  <th key={i} className="px-2 py-2 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap dark:text-gray-400">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {activeRows.map(item => (
+              {visibleRows.map(item => (
                 <tr key={item.itemKey} className={SCHED_STATUS_META[item.status]?.row || ''}>
                   <td className="px-2 py-2 whitespace-nowrap"><SchedDot status={item.status} /></td>
-                  <td className="px-2 py-2 whitespace-nowrap">
-                    {item.label}
-                    <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded dark:text-gray-400">{item.category}</span>
+                  <td className="px-2 py-2">
+                    <span className="text-gray-800 dark:text-gray-200">{item.label}</span>
+                    <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-400">{item.category}</span>
                     {item.resetsItemKeys && item.resetsItemKeys.length > 0 && (
-                      <span className="ml-1 text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded dark:bg-purple-900/30" title={`Resets: ${item.resetsItemKeys.join(', ')}`}>
-                        🔄 auto-resets related items
+                      <span className="ml-1 text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded dark:bg-purple-900/30 dark:text-purple-300" title={`Resets: ${item.resetsItemKeys.join(', ')}`}>
+                        🔄 auto-resets
                       </span>
                     )}
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                    {item.lastPerformedAt ? fmtDate(item.lastPerformedAt) : '—'}
-                    {item.lastPerformedMileage ? ` (${Number(item.lastPerformedMileage).toLocaleString()} mi)` : ''}
+                    {item.lastPerformedAt ? fmtDay(item.lastPerformedAt) : '—'}
+                    {item.lastPerformedMileage ? ` · ${Number(item.lastPerformedMileage).toLocaleString()} mi` : ''}
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                     {item.dueDate || '—'}{item.dueMiles ? ` / ${Number(item.dueMiles).toLocaleString()} mi` : ''}
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs">{fmtMoney(item.totalCostCents)}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs space-x-2">
+                  <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">{fmtMoney(item.totalCostCents)}</td>
+                  <td className="px-2 py-2 whitespace-nowrap text-xs text-right space-x-2">
                     <button onClick={() => setMarkDoneItem(item)} className="text-blue-600 hover:underline">Mark Done</button>
                     {!item.asNeeded && <button onClick={() => setSnoozeItem(item)} className="text-yellow-600 hover:underline">Snooze</button>}
-                    <button onClick={() => handleDeactivate(item)} className="text-red-500 hover:underline">{item.isCustom ? 'Delete' : 'Stop Tracking'}</button>
+                    <button onClick={() => handleDeactivate(item)} className="text-red-500 hover:underline">{item.isCustom ? 'Delete' : 'Stop'}</button>
                   </td>
                 </tr>
               ))}
@@ -1126,7 +1037,7 @@ function MaintenanceSchedulePanel({ vin }) {
       {markDoneItem && <SchedMarkDoneModal vin={vin} item={markDoneItem} onClose={() => setMarkDoneItem(null)} onSaved={load} />}
       {snoozeItem && <SchedSnoozeModal vin={vin} item={snoozeItem} onClose={() => setSnoozeItem(null)} onSaved={load} />}
       {showAddCustom && <SchedAddCustomModal vin={vin} onClose={() => setShowAddCustom(false)} onSaved={load} />}
-    </div>
+    </Card>
   );
 }
 
@@ -1140,15 +1051,21 @@ const MAINT_SORT_OPTIONS = [
   { value: 'mileage_asc',  label: 'Mileage (Lowest First)' },
 ];
 
-// ── Maintenance Panel ────────────────────────────────────────────────────────
+const BLANK_MAINT_FORM = {
+  maintenanceType: 'Other', description: '', mileageAtService: '', performedBy: '',
+  cost: '', performedAt: new Date().toISOString().slice(0, 10), isPublic: false,
+};
+
+// ── Maintenance Records Panel ────────────────────────────────────────────────
 function MaintenancePanel({ vin }) {
   const api = useApi();
 
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  const [form, setForm] = useState({ maintenanceType: 'Other', description: '', mileageAtService: '', performedBy: '', cost: '', performedAt: new Date().toISOString().slice(0, 10), isPublic: false });
+  const [form, setForm] = useState(BLANK_MAINT_FORM);
   const [showForm, setShowForm] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Filters
   const [searchText, setSearchText]   = useState('');
@@ -1170,7 +1087,7 @@ function MaintenancePanel({ vin }) {
 
   const availableTypes = Array.from(new Set(records.map(r => r.maintenanceType).filter(Boolean))).sort();
 
-  const filteredRecords = records
+  const filteredRecords = useMemo(() => records
     .filter(m => {
       if (typeFilter !== 'all' && m.maintenanceType !== typeFilter) return false;
       if (publicOnly && !m.isPublic) return false;
@@ -1193,7 +1110,14 @@ function MaintenancePanel({ vin }) {
         case 'date_desc':
         default:            return (b.performedAt || '').localeCompare(a.performedAt || '');
       }
-    });
+    }),
+  [records, typeFilter, publicOnly, startDate, endDate, searchText, sortBy]);
+
+  const { limit, pageProps } = usePaged(filteredRecords.length, 10);
+
+  const totalSpendCents = records.reduce((s, m) => s + (m.cost || 0), 0);
+  const activeFilterCount =
+    (searchText ? 1 : 0) + (typeFilter !== 'all' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0) + (publicOnly ? 1 : 0);
 
   const resetFilters = () => {
     setSearchText(''); setTypeFilter('all'); setStartDate(''); setEndDate('');
@@ -1208,7 +1132,7 @@ function MaintenancePanel({ vin }) {
         mileageAtService: Number(form.mileageAtService),
         cost: Math.round(Number(form.cost) * 100),
       });
-      setForm({ maintenanceType: 'Other', description: '', mileageAtService: '', performedBy: '', cost: '', performedAt: new Date().toISOString().slice(0, 10), isPublic: false });
+      setForm(BLANK_MAINT_FORM);
       setShowForm(false);
       load();
     } catch (e2) {
@@ -1227,32 +1151,37 @@ function MaintenancePanel({ vin }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide dark:text-gray-400">Maintenance Records</h2>
-        <button onClick={() => setShowForm(s => !s)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
-          {showForm ? 'Cancel' : '+ Add Record'}
-        </button>
-      </div>
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+    <Card
+      title={`Maintenance Records${records.length ? ` (${records.length})` : ''}`}
+      description={records.length ? `Lifetime spend: ${fmtMoney(totalSpendCents)}` : undefined}
+      action={
+        <div className="flex shrink-0 gap-2">
+          {records.length > 0 && (
+            <button onClick={() => setShowFilters(s => !s)}
+              className="text-xs border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+              Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+            </button>
+          )}
+          <button onClick={() => setShowForm(s => !s)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
+            {showForm ? 'Cancel' : '+ Add Record'}
+          </button>
+        </div>
+      }
+    >
+      <Alert kind="error">{err}</Alert>
 
       {showForm && (
         <form onSubmit={handleSave} className="space-y-3 mb-6 border-b border-gray-100 pb-6 dark:border-gray-700">
-          <select value={form.maintenanceType} onChange={e => setForm(f => ({ ...f, maintenanceType: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600">
-            {MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <input placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-          <div className="grid grid-cols-2 gap-3">
-            <input type="number" placeholder="Mileage" value={form.mileageAtService} onChange={e => setForm(f => ({ ...f, mileageAtService: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            <input placeholder="Performed by" value={form.performedBy} onChange={e => setForm(f => ({ ...f, performedBy: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            <input type="number" step="0.01" placeholder="Cost ($)" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
-            <input type="date" value={form.performedAt} onChange={e => setForm(f => ({ ...f, performedAt: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm dark:border-gray-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select value={form.maintenanceType} onChange={e => setForm(f => ({ ...f, maintenanceType: e.target.value }))} className={MODAL_INPUT}>
+              {MAINTENANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input type="date" value={form.performedAt} onChange={e => setForm(f => ({ ...f, performedAt: e.target.value }))} className={MODAL_INPUT} />
+            <input placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              className={`${MODAL_INPUT} sm:col-span-2`} />
+            <input type="number" placeholder="Mileage" value={form.mileageAtService} onChange={e => setForm(f => ({ ...f, mileageAtService: e.target.value }))} className={MODAL_INPUT} />
+            <input placeholder="Performed by" value={form.performedBy} onChange={e => setForm(f => ({ ...f, performedBy: e.target.value }))} className={MODAL_INPUT} />
+            <input type="number" step="0.01" placeholder="Cost ($)" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} className={MODAL_INPUT} />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
             <input type="checkbox" checked={form.isPublic} onChange={e => setForm(f => ({ ...f, isPublic: e.target.checked }))} />
@@ -1262,18 +1191,18 @@ function MaintenancePanel({ vin }) {
         </form>
       )}
 
-      {records.length > 0 && (
+      {showFilters && records.length > 0 && (
         <div className="mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 items-end bg-gray-50 rounded-lg p-3 dark:bg-gray-900/40">
           <div className="col-span-2">
             <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">Search</label>
             <input type="text" placeholder="Description, notes, mechanic…" value={searchText}
               onChange={e => setSearchText(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600" />
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">Type</label>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600">
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
               <option value="all">All Types</option>
               {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -1281,17 +1210,17 @@ function MaintenancePanel({ vin }) {
           <div>
             <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">From</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600" />
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">To</label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600" />
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" />
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-500 mb-1 dark:text-gray-400">Sort By</label>
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600">
+              className="w-full border border-gray-300 rounded px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
               {MAINT_SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
@@ -1300,39 +1229,53 @@ function MaintenancePanel({ vin }) {
               <input type="checkbox" checked={publicOnly} onChange={e => setPublicOnly(e.target.checked)} />
               Public only
             </label>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-400 dark:text-gray-500">{filteredRecords.length} of {records.length} records</span>
-              <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline">Reset Filters</button>
-            </div>
+            <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline">Reset Filters</button>
           </div>
         </div>
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
+        <Empty>Loading…</Empty>
       ) : records.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No maintenance records.</p>
+        <Empty>No maintenance records.</Empty>
       ) : filteredRecords.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No records match the current filters.</p>
+        <Empty>No records match the current filters.</Empty>
       ) : (
-        <div className="space-y-3">
-          {filteredRecords.map((m, i) => (
-            <div key={m.timestamp || i} className="border border-gray-100 rounded-lg p-3 text-sm dark:border-gray-700">
-              <div className="flex justify-between">
-                <span className="font-medium">{m.maintenanceType}</span>
-                <div className="flex items-center gap-2">
-                  {m.isPublic && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Public</span>}
-                  {m.linkedTaxExpenseTs && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30">🧾 Linked Expense</span>}
-                  <button onClick={() => handleDelete(m.timestamp)} className="text-xs text-red-500 hover:underline">Delete</button>
-                </div>
-              </div>
-              <p className="text-gray-500 text-xs mt-1 dark:text-gray-400">{m.description}</p>
-              <p className="text-gray-400 text-xs dark:text-gray-500">{m.mileageAtService?.toLocaleString()} mi · {m.performedBy} · {fmtDate(m.performedAt)} · {fmtMoney(m.cost)}</p>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-gray-200 dark:border-gray-700">
+                <tr>
+                  {['Date', 'Type', 'Description', 'Mileage', 'By', 'Cost', ''].map((h, i) => (
+                    <th key={i} className="px-2 py-2 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap dark:text-gray-400">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {filteredRecords.slice(0, limit).map((m, i) => (
+                  <tr key={m.timestamp || i}>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{fmtDay(m.performedAt)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      <span className="text-gray-800 dark:text-gray-200">{m.maintenanceType}</span>
+                      {m.isPublic && <span className="ml-1.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded dark:bg-green-900/30 dark:text-green-300">Public</span>}
+                      {m.linkedTaxExpenseTs && <span className="ml-1 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded dark:bg-purple-900/30 dark:text-purple-300" title="Linked tax expense">🧾</span>}
+                    </td>
+                    <td className="px-2 py-2 text-xs text-gray-600 max-w-xs truncate dark:text-gray-300" title={m.description}>{m.description || '—'}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{m.mileageAtService ? `${m.mileageAtService.toLocaleString()} mi` : '—'}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{m.performedBy || '—'}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-gray-300">{fmtMoney(m.cost)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-right">
+                      <button onClick={() => handleDelete(m.timestamp)} className="text-xs text-red-500 hover:underline">Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ShowMore {...pageProps} />
+        </>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -1342,6 +1285,7 @@ function RentalHistoryPanel({ vin }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     setLoading(true);
@@ -1351,42 +1295,67 @@ function RentalHistoryPanel({ vin }) {
       .finally(() => setLoading(false));
   }, [api, vin]);
 
+  const statuses = useMemo(
+    () => Array.from(new Set(bookings.map(b => b.status).filter(Boolean))).sort(),
+    [bookings],
+  );
+
+  const rows = useMemo(() => {
+    const filtered = statusFilter === 'all' ? bookings : bookings.filter(b => b.status === statusFilter);
+    return [...filtered].sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
+  }, [bookings, statusFilter]);
+
+  const { limit, pageProps } = usePaged(rows.length, 10);
+  const totalRevenue = bookings.reduce((s, b) => s + (b.totalAmountCents || 0), 0);
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 dark:bg-gray-800 dark:border-gray-700">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 dark:text-gray-400">Rental History</h2>
-      {err && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+    <Card
+      title={`Rental History${bookings.length ? ` (${bookings.length})` : ''}`}
+      description={bookings.length ? `Gross booking value: ${fmtMoney(totalRevenue)}` : undefined}
+      action={statuses.length > 1 ? (
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="shrink-0 text-xs border border-gray-300 rounded-lg px-2 py-1.5 capitalize dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+          <option value="all">All statuses</option>
+          {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      ) : null}
+    >
+      <Alert kind="error">{err}</Alert>
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
-      ) : bookings.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500">No rental history yet.</p>
+        <Empty>Loading…</Empty>
+      ) : rows.length === 0 ? (
+        <Empty>No rental history yet.</Empty>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                {['Booking', 'Guest', 'Start', 'End', 'Status', 'Total'].map(h => (
-                  <th key={h} className="px-2 py-2 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap dark:text-gray-400">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {bookings.map(b => (
-                <tr key={b.bookingId} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900/40">
-                  <td className="px-2 py-2 whitespace-nowrap">
-                    <Link to={`/bookings/${b.bookingId}`} className="text-blue-600 hover:underline text-xs">{b.bookingId}</Link>
-                  </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs">{b.guestName || '—'}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs">{fmtDate(b.startTime)}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs">{fmtDate(b.endTime)}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs capitalize">{b.status}</td>
-                  <td className="px-2 py-2 whitespace-nowrap text-xs">{fmtMoney(b.totalAmountCents)}</td>
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-gray-200 dark:border-gray-700">
+                <tr>
+                  {['Booking', 'Guest', 'Start', 'End', 'Status', 'Total'].map(h => (
+                    <th key={h} className="px-2 py-2 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap dark:text-gray-400">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {rows.slice(0, limit).map(b => (
+                  <tr key={b.bookingId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      <Link to={`/bookings/${b.bookingId}`} className="text-blue-600 hover:underline text-xs font-mono">{b.bookingId}</Link>
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-gray-300">{b.guestName || '—'}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{fmtDay(b.startTime)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{fmtDay(b.endTime)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs capitalize text-gray-700 dark:text-gray-300">{b.status}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-gray-300">{fmtMoney(b.totalAmountCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ShowMore {...pageProps} />
+        </>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -1394,9 +1363,14 @@ function RentalHistoryPanel({ vin }) {
 export default function AdminVehicleDetail() {
   const { vin } = useParams();
   const api = useApi();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vehicle, setVehicle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+
+  const tabParam = searchParams.get('tab');
+  const tab = TABS.some(t => t.id === tabParam) ? tabParam : 'overview';
+  const setTab = (id) => setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -1411,35 +1385,84 @@ export default function AdminVehicleDetail() {
   const handleRetire = async () => {
     if (!window.confirm('Retire this vehicle? It will no longer be bookable.')) return;
     try {
-      await api.put(`/admin/vehicles/${vin}`, { ...vehicle, status: 'retired' });
+      await api.put(`/admin/vehicles/${vin}`, { status: 'retired' });
       reload();
     } catch (e) {
       setErr(e.response?.data?.error || 'Retire failed');
     }
   };
 
+  const odometerNote = vehicle?.odometerSource
+    ? `Source: ${vehicle.odometerSource === 'tesla_telemetry' ? 'Tesla telemetry'
+        : vehicle.odometerSource === 'maintenance_log' ? 'maintenance log' : 'manual entry'}`
+      + (vehicle.odometerUpdatedAt ? ` · updated ${fmtDate(vehicle.odometerUpdatedAt)}` : '')
+    : undefined;
+
   return (
     <AdminLayout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Link to="/vehicles" className="text-sm text-blue-600 hover:underline">← Back to Vehicles</Link>
 
-        {err && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 dark:bg-red-900/20">{err}</div>}
+        {err && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 dark:bg-red-900/20 dark:border-red-900 dark:text-red-300">{err}</div>}
 
         {loading || !vehicle ? (
           <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
         ) : (
           <>
             <HeaderPanel vehicle={vehicle} onRetire={handleRetire} onSaved={reload} />
-            <PhotoGalleryPanel vin={vin} />
-            <EditableFieldsPanel vehicle={vehicle} onSaved={reload} />
-            <ValuationPanel vehicle={vehicle} onRefreshed={reload} />
-            <VehicleControlsPanel vehicle={vehicle} />
-            <DriversPanel vehicle={vehicle} />
-            <GuestKeysPanel vin={vin} />
-            <MaintenanceSchedulePanel vin={vin} />
-            <MaintenancePanel vin={vin} />
 
-            <RentalHistoryPanel vin={vin} />
+            <nav className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition ${
+                    tab === t.id
+                      ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                  }`}>
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+
+            {tab === 'overview' && (
+              <div className="space-y-6">
+                <VehicleFieldsCard vehicle={vehicle} groups={OVERVIEW_GROUPS} title="Vehicle Details" onSaved={reload} />
+                <VehicleFieldsCard vehicle={vehicle} groups={MILEAGE_GROUPS} title="Mileage" description={odometerNote} onSaved={reload} />
+              </div>
+            )}
+
+            {tab === 'financials' && (
+              <div className="space-y-6">
+                <VehicleFieldsCard vehicle={vehicle} groups={FINANCIAL_GROUPS} title="Acquisition & Financing" onSaved={reload} />
+                <ValuationPanel vehicle={vehicle} onRefreshed={reload} />
+              </div>
+            )}
+
+            {tab === 'maintenance' && (
+              <div className="space-y-6">
+                <MaintenanceSchedulePanel vin={vin} />
+                <MaintenancePanel vin={vin} />
+              </div>
+            )}
+
+            {tab === 'access' && (
+              <div className="space-y-6">
+                <VehicleFieldsCard vehicle={vehicle} groups={ACCESS_GROUPS} title="Tesla & Access Settings" onSaved={reload} />
+                <VehicleControlsPanel vehicle={vehicle} />
+                <DriversPanel vehicle={vehicle} />
+                <GuestKeysPanel vin={vin} />
+              </div>
+            )}
+
+            {tab === 'rentals' && <RentalHistoryPanel vin={vin} />}
+
+            {tab === 'photos' && (
+              <div className="space-y-6">
+                <PhotoGalleryPanel vin={vin} />
+                <VehicleFieldsCard vehicle={vehicle} groups={MEDIA_GROUPS} title="Image URLs"
+                  description="External image links used on the public listing." onSaved={reload} />
+              </div>
+            )}
           </>
         )}
       </div>

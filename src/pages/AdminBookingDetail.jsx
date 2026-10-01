@@ -696,6 +696,8 @@ function GuestKeyPanel({ booking, onRefresh }) {
   const revokedAt         = booking.guestKeyRevokedAt || "";
   const eraseStatus       = booking.eraseUserDataStatus || "";
   const eraseAt           = booking.eraseUserDataAt || "";
+  const driversRevokedAt  = booking.driversRevokedAt || "";
+  const driversRevokedSt  = booking.driversRevokedStatus || "";
   const guestModeCmd      = booking.guestModeCommandStatus || "";
   const isTesla           = booking.teslaEnabled || booking.vin?.startsWith("5YJ") || booking.vin?.startsWith("7SA");
   const portalUrl         = normalisePortalUrl(booking.guestAccessUrl || booking.guestKeyLink);
@@ -900,8 +902,17 @@ function GuestKeyPanel({ booking, onRefresh }) {
             active/disabled the status badge above already reflects the outcome,
             so showing a stale "failed" label alongside "Guest Mode Active ✓" is
             confusing. We suppress it once the command has clearly succeeded. */}
-        {(eraseStatus || (guestModeCmd && guestModeCmd === "failed" && gkStatus !== "guest_mode_active" && gkStatus !== "guest_mode_disabled")) && (
+        {(eraseStatus || driversRevokedAt || driversRevokedSt || (guestModeCmd && guestModeCmd === "failed" && gkStatus !== "guest_mode_active" && gkStatus !== "guest_mode_disabled")) && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-3 text-xs dark:border-gray-700">
+            {(driversRevokedAt || driversRevokedSt) && (
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
+                driversRevokedAt                 ? "bg-green-100 text-green-700" :
+                driversRevokedSt === "failed"    ? "bg-red-100 text-red-700" :
+                "bg-gray-100 text-gray-600 dark:text-gray-300"
+              }`}>
+                🔑 Driver access removed: {driversRevokedAt ? `✓ ${new Date(driversRevokedAt).toLocaleString()}` : driversRevokedSt}
+              </span>
+            )}
             {eraseStatus && (
               <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
                 eraseStatus === "erased"  ? "bg-green-100 text-green-700" :
